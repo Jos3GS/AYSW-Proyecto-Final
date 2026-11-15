@@ -1,0 +1,71 @@
+# ITM Service Desk (Backend) - Mapa de Versiones y Ciclo de Vida
+**Ubicación:** `docs/version_map.md`  
+**Versión Actual en Desarrollo:** `v0.1.0-alpha`  
+**Última Actualización:** 2026-11-13  
+
+---
+
+## 1. Estrategia de Versionamiento (SemVer)
+El Backend de **ITM Service Desk** se rige por **Semantic Versioning 2.0.0** (`MAJOR.MINOR.PATCH`):
+* **MAJOR (`X.0.0`):** Cambios que rompen compatibilidad hacia atrás en los contratos REST JSON, esquema de JWT o transiciones de la máquina de estados.
+* **MINOR (`0.Y.0`):** Nuevos endpoints, funcionalidades de negocio (HU/RF) o capacidades compatibles hacia atrás.
+* **PATCH (`0.0.Z`):** Corrección de bugs, parches de seguridad, ajustes en consultas Exposed DSL o refactorizaciones sin alterar contratos públicos.
+
+---
+
+## 2. Mapa de Versiones e Hitos (Milestones)
+
+```mermaid
+flowchart LR
+    M0["v0.1.0 (Foundation, Auth & Usuarios)"] --> M1["v0.2.0 (Solicitudes, State & Trazabilidad)"]
+    M1 --> M2["v0.3.0 (Consolidado de Coordinación)"]
+    M2 --> M3["v1.0.0 (Hardening RNF & Release Final)"]
+```
+
+### Tabla de Hitos y Entregables
+
+| Versión | Nombre del Hito | Objetivo Principal | Specs / Épicas Incluidas | Trazabilidad HU / RF / RNF | Estado |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **`v0.1.0`** | Foundation, Auth & Personal | Arquitectura en capas, Ktor Netty, HikariCP + Flyway (usuario semilla Coordinador), registro público de solicitantes, login JWT (1h) con BCrypt, RBAC y gestión de personal interno | `001-project-setup`, `002-auth-users` | **HU-01** (registro), **HU-07**; **RF-01**, **RF-07**; **RNF-01 a RNF-04**, **RNF-06**, **RNF-08** | 🟡 En Progreso |
+| **`v0.2.0`** | Core Service Desk & Trazabilidad | Registro de solicitudes (`SOL-AAAA-NNNNN`, Builder), consulta/cancelación, bandeja y asignación/priorización (SLA 24h/72h/120h), máquina de estados (Patrón State), intervenciones, escalamiento, respuesta final, historial inmutable y cierre automático (24h) | `003-service-requests`, `004-attention-lifecycle` | **HU-01** (solicitud), **HU-02**, **HU-03**, **HU-04**, **HU-05**; **RF-02 a RF-05**; **RNF-05 a RNF-09** | ⚪ Planificado |
+| **`v0.3.0`** | Coordinación & Reportes Consolidados | Resumen consolidado para Coordinación (totales por estado, categoría, prioridad, responsable, vencidas y dentro/fuera de plazo), filtros combinados (Builder) y listado general paginado | `005-coordination-reports` | **HU-06**; **RF-06**; **RNF-03**, **RNF-07** | ⚪ Planificado |
+| **`v1.0.0`** | Release v1.0 & Quality Gate | Cumplimiento integral RNF-01 a RNF-10 (rendimiento `< 2s` con 1000 solicitudes, paginación 20/pág, zona horaria `America/Bogota`, `.env.example`, README local), cobertura $\ge 90\%$ con Testcontainers PostgreSQL, `ktlint 1.8.x` y auditoría `converge.md` | `006-hardening-release` | **RNF-01 a RNF-10** (auditoría completa de alcance y calidad) | ⚪ Planificado |
+
+> **Nota de Alcance (RNF-10):** Por restricción explícita de alcance del sistema, no se incluyen archivos adjuntos, envío de correos electrónicos, mensajería WhatsApp, pagos, facturación ni integraciones con plataformas externas en ninguna versión del ciclo actual.
+
+---
+
+## 3. Matriz de Dependencias entre Features
+
+```text
+[001-project-setup] (Ktor Netty 3.6.x, Exposed DSL 1.6.x, HikariCP, Flyway, ktlint 1.8.x, Testcontainers)
+     └── [002-auth-users] (RF-01, RF-07: Registro solicitante, Login JWT 8h + BCrypt, RBAC, Personal interno + Semilla Coordinador)
+              └── [003-service-requests] (RF-02, RF-03: Builder de solicitudes, SOL-AAAA-NNNNN, solicitud previa, listado paginado y cancelación)
+                       └── [004-attention-lifecycle] (RF-04, RF-05: State Pattern Tablas 3-4, SLA Tabla 5, intervenciones, escalamiento, respuesta, historial inmutable y cierre auto 24h)
+                                └── [005-coordination-reports] (RF-06: Totales consolidados, métricas de plazo y filtros con Builder)
+                                         └── [006-hardening-release] (RNF-01..RNF-10, cobertura >= 90%, README e instalación local, v1.0.0)
+```
+
+---
+
+## 4. Matriz de Compatibilidad Técnica
+
+| Componente | Versión del Software | Dependencia Externa / Runtime | Compatibilidad |
+| :--- | :--- | :--- | :--- |
+| **Runtime JVM** | `v0.1.0+` | JDK | `21 LTS` |
+| **Lenguaje** | `v0.1.0+` | Kotlin | `2.4.x` |
+| **Framework API** | `v0.1.0+` | Ktor Server (Netty) + `kotlinx.serialization.json` | `3.6.x` |
+| **Base de Datos** | `v0.1.0+` | PostgreSQL + Exposed DSL + HikariCP + Flyway | `PostgreSQL 18.x` / `Exposed 1.6.x` |
+| **Seguridad** | `v0.1.0+` | Ktor Auth JWT (`exp = 1h`) + `at.favre.lib:bcrypt` | `bcrypt 0.10.2` + HTTPS/TLS |
+| **Zona Horaria & Formato** | `v0.1.0+` | Estándar de fechas y SLA | `America/Bogota` (`dd/mm/aaaa hh:mm` en presentación / ISO-8601 en API) |
+| **Calidad & Testing** | `v0.1.0+` | `org.jlleitschuh.gradle.ktlint` + Ktor Server Tests + Testcontainers | `ktlint 1.8.x` / Cobertura $\ge 90\%$ |
+| **Consumidor Oficial** | `v0.1.0+` | ITM Service Desk Frontend (Compose Multiplatform 1.12.2) | Web (`wasmJs` en Chrome, Firefox, Edge) y Android (`minSdk 26`, `targetSdk 35/36`) |
+
+---
+
+## 5. Changelog / Registro Histórico
+
+### [v0.1.0-alpha] - 2026-11-13
+#### Added
+- Constitución del proyecto Backend (`backend/.specify/memory/constitution.md` v1.0.0).
+- Definición del mapa de versiones alineado con las historias **HU-01 a HU-07**, requisitos **RF-01 a RF-07** y **RNF-01 a RNF-10**.
