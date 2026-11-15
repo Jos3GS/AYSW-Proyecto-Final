@@ -57,6 +57,9 @@ abstract class IntegrationTestBase {
     protected fun cleanAuthTables(connection: DatabaseConnection) {
         connection.dataSource.connection.use { conn ->
             conn.createStatement().use { stmt ->
+                stmt.executeUpdate("DELETE FROM request_history")
+                stmt.executeUpdate("DELETE FROM service_requests")
+                stmt.executeUpdate("DELETE FROM request_code_sequences")
                 stmt.executeUpdate("DELETE FROM revoked_tokens")
                 stmt.executeUpdate("DELETE FROM users")
             }

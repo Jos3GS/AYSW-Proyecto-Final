@@ -9,16 +9,19 @@ import com.itm.servicedesk.config.security.configureJwtAuth
 import com.itm.servicedesk.domain.builder.AppConfig
 import com.itm.servicedesk.repository.ExposedHealthRepository
 import com.itm.servicedesk.repository.ExposedRevokedTokenRepository
+import com.itm.servicedesk.repository.ExposedServiceRequestRepository
 import com.itm.servicedesk.repository.ExposedUserRepository
 import com.itm.servicedesk.repository.ExposedUserSeedRepository
 import com.itm.servicedesk.routing.authRouting
 import com.itm.servicedesk.routing.healthRouting
+import com.itm.servicedesk.routing.serviceRequestRouting
 import com.itm.servicedesk.routing.staffRouting
 import com.itm.servicedesk.service.AuthService
 import com.itm.servicedesk.service.BcryptPasswordHasher
 import com.itm.servicedesk.service.CoordinatorSeedService
 import com.itm.servicedesk.service.HealthService
 import com.itm.servicedesk.service.JwtTokenService
+import com.itm.servicedesk.service.ServiceRequestService
 import com.itm.servicedesk.service.StaffService
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationStopped
@@ -80,6 +83,8 @@ fun Application.configureModule(
 
     val userRepository = ExposedUserRepository(dbConnection.database, appConfig.server.timezone)
     val revokedTokenRepository = ExposedRevokedTokenRepository(dbConnection.database)
+    val serviceRequestRepository =
+        ExposedServiceRequestRepository(dbConnection.database, appConfig.server.timezone)
     val passwordHasher = BcryptPasswordHasher()
     val tokenProvider = JwtTokenService(appConfig.jwt, appConfig.server.timezone)
 
@@ -97,6 +102,11 @@ fun Application.configureModule(
             passwordHasher = passwordHasher,
             timezone = appConfig.server.timezone,
         )
+    val serviceRequestService =
+        ServiceRequestService(
+            serviceRequestRepository = serviceRequestRepository,
+            timezone = appConfig.server.timezone,
+        )
 
     configureJwtAuth(
         jwtConfig = appConfig.jwt,
@@ -109,5 +119,6 @@ fun Application.configureModule(
         healthRouting(healthService)
         authRouting(authService, appConfig.server.timezone)
         staffRouting(staffService, appConfig.server.timezone)
+        serviceRequestRouting(serviceRequestService, appConfig.server.timezone)
     }
 }

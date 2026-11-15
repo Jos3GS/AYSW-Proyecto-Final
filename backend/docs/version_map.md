@@ -1,6 +1,6 @@
 # ITM Service Desk (Backend) - Mapa de Versiones y Ciclo de Vida
 **Ubicación:** `docs/version_map.md`  
-**Versión Actual en Desarrollo:** `v0.1.0`  
+**Versión Actual en Desarrollo:** `v0.2.0-alpha`  
 **Última Actualización:** 2026-11-15  
 
 ---
@@ -27,7 +27,7 @@ flowchart LR
 | Versión | Nombre del Hito | Objetivo Principal | Specs / Épicas Incluidas | Trazabilidad HU / RF / RNF | Estado |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **`v0.1.0`** | Foundation, Auth & Personal | Arquitectura en capas, Ktor Netty, HikariCP + Flyway (usuario semilla Coordinador), registro público de solicitantes, login JWT (1h) con BCrypt, RBAC y gestión de personal interno | `001-project-setup`, `002-auth-users` | **HU-01** (registro), **HU-07**; **RF-01**, **RF-07**; **RNF-01 a RNF-04**, **RNF-06**, **RNF-08** | 🟢 Completado |
-| **`v0.2.0`** | Core Service Desk & Trazabilidad | Registro de solicitudes (`SOL-AAAA-NNNNN`, Builder), consulta/cancelación, bandeja y asignación/priorización (SLA 24h/72h/120h), máquina de estados (Patrón State), intervenciones, escalamiento, respuesta final, historial inmutable y cierre automático (24h) | `003-service-requests`, `004-attention-lifecycle` | **HU-01** (solicitud), **HU-02**, **HU-03**, **HU-04**, **HU-05**; **RF-02 a RF-05**; **RNF-05 a RNF-09** | ⚪ Planificado |
+| **`v0.2.0`** | Core Service Desk & Trazabilidad | Registro de solicitudes (`SOL-AAAA-NNNNN`, Builder), consulta/cancelación, bandeja y asignación/priorización (SLA 24h/72h/120h), máquina de estados (Patrón State), intervenciones, escalamiento, respuesta final, historial inmutable y cierre automático (24h) | `003-service-requests` (Completado), `004-attention-lifecycle` (Pendiente) | **HU-01** (solicitud), **HU-02**, **HU-03**, **HU-04**, **HU-05**; **RF-02 a RF-05**; **RNF-05 a RNF-09** | 🟡 En progreso (`003` completado) |
 | **`v0.3.0`** | Coordinación & Reportes Consolidados | Resumen consolidado para Coordinación (totales por estado, categoría, prioridad, responsable, vencidas y dentro/fuera de plazo), filtros combinados (Builder) y listado general paginado | `005-coordination-reports` | **HU-06**; **RF-06**; **RNF-03**, **RNF-07** | ⚪ Planificado |
 | **`v1.0.0`** | Release v1.0 & Quality Gate | Cumplimiento integral RNF-01 a RNF-10 (rendimiento `< 2s` con 1000 solicitudes, paginación 20/pág, zona horaria `America/Bogota`, `.env.example`, README local), cobertura $\ge 90\%$ con Testcontainers PostgreSQL, `ktlint 1.8.x` y auditoría `converge.md` | `006-hardening-release` | **RNF-01 a RNF-10** (auditoría completa de alcance y calidad) | ⚪ Planificado |
 
@@ -64,6 +64,14 @@ flowchart LR
 ---
 
 ## 5. Changelog / Registro Histórico
+
+### [v0.2.0-alpha] - 2026-11-15
+#### Added
+- Implementación completa y verificada de **`003-service-requests`**:
+  - Migración Flyway `V3__create_service_requests_tables.sql` (`request_code_sequences`, `service_requests` con columnas nullable para `004`, `request_history` append-only e índices compuestos) y definiciones Exposed 1.6.x DSL (`RequestCodeSequencesTable`, `ServiceRequestsTable`, `RequestHistoryTable`).
+  - Capa de dominio pura (`RequestCategory`, `RequestStatus`, `RequestPriority`, `HistoryAction`, `HistoryActorRole`, `ServiceRequest`, `ServiceRequestSummary`, `ApplicantVisibleHistoryEntry`, `ServiceRequestDetail`), **Patrón GoF State** (`ServiceRequestState` con `AbiertaState`..`CanceladaState`), **Patrón GoF Builder** (`ServiceRequestBuilder`, `MyRequestsQueryBuilder` con `page >= 1`, `size in 1..20`) y `RequestValidator` (Tabla 2, formato `^SOL-\d{4}-\d{5,}$`, `reason <= 500`).
+  - `ExposedServiceRequestRepository` transaccional con consecutivo atómico anual `SOL-AAAA-NNNNN` (`America/Bogota`) vía `INSERT ... ON CONFLICT DO UPDATE RETURNING`, filtrado de privacidad `RF-03` en historial, paginación `< 2s` sobre `1000` registros (`RNF-07`) y cancelación condicional atómica `WHERE id = ? AND status = 'ABIERTA'`.
+  - `ServiceRequestService`, DTOs `@Serializable` estrictos (`ignoreUnknownKeys = false`), `ServiceRequestRouting` bajo `authenticate("auth-jwt")` + `withRole(UserRole.SOLICITANTE)` para `/api/v1/requests` (`POST`, `GET /my`, `GET /{code}`, `POST /{code}/cancel`), pruebas unitarias/Testcontainers y verificación Kover ($\ge 90\%$).
 
 ### [v0.1.0] - 2026-11-15
 #### Added
