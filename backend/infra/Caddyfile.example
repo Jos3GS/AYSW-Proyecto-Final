@@ -1,0 +1,39 @@
+# ITM Service Desk - Ejemplo de configuración Caddy (Terminación TLS/HTTPS)
+# Ktor escucha únicamente HTTP local en APP_PORT (8080) detrás de este proxy inverso.
+
+# ---------------------------------------------------------------------------
+# Opción 1: Desarrollo local con HTTPS autofirmado de Caddy
+# ---------------------------------------------------------------------------
+localhost:8443 {
+    reverse_proxy 127.0.0.1:8080 {
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+
+    header {
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        -Server
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Opción 2: Producción con dominio oficial y certificado TLS automático (ACME)
+# ---------------------------------------------------------------------------
+# api.servicedesk.itm.edu.co {
+#     encode zstd gzip
+#
+#     reverse_proxy 127.0.0.1:8080 {
+#         header_up X-Forwarded-For {remote_host}
+#         header_up X-Forwarded-Proto {scheme}
+#     }
+#
+#     header {
+#         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+#         X-Content-Type-Options "nosniff"
+#         X-Frame-Options "DENY"
+#         Referrer-Policy "strict-origin-when-cross-origin"
+#         -Server
+#     }
+# }

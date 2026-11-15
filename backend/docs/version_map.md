@@ -65,7 +65,8 @@ flowchart LR
 
 ## 5. Changelog / Registro Histórico
 
-### [v0.1.0-alpha] - 2026-11-13
+### [v0.1.0-alpha] - 2026-11-14
 #### Added
 - Constitución del proyecto Backend (`backend/.specify/memory/constitution.md` v1.0.0).
 - Definición del mapa de versiones alineado con las historias **HU-01 a HU-07**, requisitos **RF-01 a RF-07** y **RNF-01 a RNF-10**.
+- Implementación completa y verificada de **`001-project-setup`**: proyecto Gradle con Version Catalog (`gradle/libs.versions.toml`), `ktlint 1.8.0`, JetBrains Kover ($\ge 90\%$), `EnvConfig` + `AppConfigBuilder`, HikariCP + Flyway (`V1__create_users_table.sql`) + Exposed 1.6.1 DSL, semilla idempotente del Coordinador (BCrypt costo 12), `IpAllowListPlugin`, `CORS`, `XForwardedHeaders`, `StatusPages`, `GET /api/v1/health`, `infra/Caddyfile.example`, `README.md` y suite TDD con Testcontainers `postgres:18-alpine`.

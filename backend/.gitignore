@@ -1,0 +1,20 @@
+# Environment files with real secrets
+.env
+.env.*
+!.env.example
+
+# Gradle
+.gradle/
+build/
+out/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Logs & OS
+*.log
+.DS_Store
+Thumbs.db
