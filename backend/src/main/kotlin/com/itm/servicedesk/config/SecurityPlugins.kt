@@ -17,13 +17,12 @@ import java.net.URI
 fun Application.configureSecurityPlugins(serverConfig: ServerConfig) {
     install(XForwardedHeaders) {
         extractEdgeProxy { origin, xForwarded ->
-            val directRemote = origin.remoteHost
-            val isTrustedProxy =
-                directRemote == "127.0.0.1" ||
-                    directRemote == "::1" ||
-                    directRemote == "0:0:0:0:0:0:0:1" ||
-                    directRemote.equals("localhost", ignoreCase = true)
-            if (isTrustedProxy) {
+            val directIp =
+                IpMatcher.resolveClientIp(
+                    remoteHost = origin.remoteHost,
+                    remoteAddress = origin.remoteAddress,
+                )
+            if (IpMatcher.isLoopbackIp(directIp)) {
                 val forwardedIp =
                     xForwarded.forHeader
                         ?.split(',')

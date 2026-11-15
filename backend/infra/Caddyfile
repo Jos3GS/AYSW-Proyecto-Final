@@ -1,0 +1,15 @@
+# ITM Service Desk - Configuración Caddy Local (HTTPS / Terminación TLS)
+# Expone la API en https://localhost:8443 y redirige por HTTP local hacia Ktor (127.0.0.1:8080).
+
+localhost:8443 {
+	tls internal
+
+	reverse_proxy 127.0.0.1:8080
+
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}

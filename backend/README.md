@@ -10,12 +10,16 @@ API RESTful del sistema **ITM Service Desk**, construida con **Kotlin 2.4.x**, *
   - `routing -> service -> domain`
   - `service -> repository -> domain`
   - `domain/` es completamente independiente de Ktor, Exposed, HikariCP y JDBC.
-- **Persistencia:** Exclusivamente **Exposed 1.6.x DSL** (`UsersTable`, `RevokedTokensTable`, `ExposedHealthRepository`, `ExposedUserSeedRepository`, `ExposedUserRepository`, `ExposedRevokedTokenRepository`) + **HikariCP** (`connectionTimeout = 2000ms`, `validationTimeout = 1500ms`) + **Flyway** (`V1__create_users_table.sql`, `V2__create_revoked_tokens_table.sql`).
+- **Persistencia:** Exclusivamente **Exposed 1.6.x DSL** (`UsersTable`, `RevokedTokensTable`, `RequestCodeSequencesTable`, `ServiceRequestsTable`, `RequestHistoryTable`, `ExposedHealthRepository`, `ExposedUserSeedRepository`, `ExposedUserRepository`, `ExposedRevokedTokenRepository`, `ExposedServiceRequestRepository`) + **HikariCP** (`connectionTimeout = 2000ms`, `validationTimeout = 1500ms`) + **Flyway** (`V1__create_users_table.sql`, `V2__create_revoked_tokens_table.sql`, `V3__create_service_requests_tables.sql`).
 - **Configuración y Secretos:** `EnvConfig` (Kotlin puro, prioridad a `System.getenv()` con fallback a `.env`) + `AppConfigBuilder` (Patrón GoF **Builder**), ocultando contraseñas, cadenas JDBC y secretos en `toString()`.
 - **Autenticación, Blacklist y RBAC (`002-auth-users`):**
   - **JWT (`HMAC256`, `exp = 1h / 3600s`):** Configurado con `JWT_EXPIRATION_SECONDS=3600`, emisión de `jti` UUID único por `register` / `login` y validación en `JwtAuthConfig` contra la blacklist persistente `revoked_tokens` (con purga automática `expires_at < NOW()` en `logout`).
   - **BCrypt (`0.10.2`, costo 12):** Salt aleatorio en servidor, validación de límite UTF-8 (`<= 72` bytes) y verificación contra hash dummy en `login` para evitar enumeración temporal.
   - **RBAC:** `RoleAuthorizationPlugin` (`withRole(...)`) + validación en `service`, impidiendo escalamiento de privilegios en `register` (siempre `SOLICITANTE`, `ignoreUnknownKeys = false`) y restringiendo `/api/v1/users/staff` a `COORDINADOR`.
+- **Solicitudes de Servicio y Trazabilidad (`003-service-requests`):**
+  - **Consecutivo Atómico (`SOL-AAAA-NNNNN`):** Generado por año vigente en `America/Bogota` mediante `INSERT INTO request_code_sequences ... ON CONFLICT (year) DO UPDATE SET last_number = request_code_sequences.last_number + 1 RETURNING last_number` dentro de la misma transacción de creación.
+  - **Patrones GoF State & Builder:** `ServiceRequestState` (`AbiertaState`..`CanceladaState`) gobierna la cancelación (`ABIERTA -> CANCELADA`, `403` / `409`) con `UPDATE ... WHERE id = ? AND status = 'ABIERTA'`; `ServiceRequestBuilder` y `MyRequestsQueryBuilder` (`page >= 1`, `size in 1..20`) garantizan construcción inmutable y paginación acotada (`RNF-07`).
+  - **Privacidad e Inmutabilidad (`RF-03` / `RNF-05`):** `request_history` es estrictamente append-only; `ApplicantVisibleHistoryEntry` excluye filas `INTERVENCION` y proyecta `comment = null` en `ESCALAMIENTO` y `REASIGNACION`. `previousRequestCode` exige existencia, propiedad y estado `RESUELTA` o `CERRADA` (`400` en caso contrario) sin mutar la solicitud previa.
 - **Seguridad Perimetral:** Terminación TLS delegada a **Caddy** (`infra/Caddyfile.example`) hacia HTTP local (`APP_PORT=8080`), `XForwardedHeaders` confiable, `IpAllowListPlugin` (IPs exactas y rangos CIDR desde `ALLOWED_CLIENT_IPS`), **CORS estricto** (`CORS_ALLOWED_ORIGINS`, prohibido `*`), zona horaria `America/Bogota` (`-05:00`) y `StatusPages` con respuestas estandarizadas `ApiErrorDto`.
 - **Semilla Idempotente (`RF-01`):** `CoordinatorSeedService` crea al arranque el único usuario `COORDINADOR` inicial con `at.favre.lib:bcrypt` (`0.10.2`, costo **12**) sin duplicarlo en reinicios.
 
@@ -54,7 +58,7 @@ API RESTful del sistema **ITM Service Desk**, construida con **Kotlin 2.4.x**, *
    ```
    Al arrancar:
    - Se valida toda la configuración mediante `AppConfigBuilder`.
-   - Flyway ejecuta automáticamente las migraciones pendientes (`V1__create_users_table.sql`, `V2__create_revoked_tokens_table.sql`).
+   - Flyway ejecuta automáticamente las migraciones pendientes (`V1__create_users_table.sql`, `V2__create_revoked_tokens_table.sql`, `V3__create_service_requests_tables.sql`).
    - `CoordinatorSeedService` crea de forma idempotente el único usuario `COORDINADOR` semilla.
    - Ktor Netty queda escuchando en `http://0.0.0.0:8080`.
 
@@ -77,7 +81,7 @@ API RESTful del sistema **ITM Service Desk**, construida con **Kotlin 2.4.x**, *
 
 ---
 
-## Endpoints Disponibles (`v0.1.0`)
+## Endpoints Disponibles (`v0.2.0-alpha`)
 
 | Método y Ruta | Acceso | Descripción |
 | :--- | :--- | :--- |
@@ -88,6 +92,10 @@ API RESTful del sistema **ITM Service Desk**, construida con **Kotlin 2.4.x**, *
 | `POST /api/v1/auth/logout` | JWT requerido | Revoca el `jti` en `revoked_tokens`, purga expirados y responde `204 No Content`. |
 | `POST /api/v1/users/staff` | JWT (`COORDINADOR`) | Crea personal interno (`PERSONAL_ATENCION` o `COORDINADOR`) (`201 Created`). |
 | `GET /api/v1/users/staff` | JWT (`COORDINADOR`) | Lista personal interno paginado (`page >= 1`, `size in 1..20`, excluye `SOLICITANTE`). |
+| `POST /api/v1/requests` | JWT (`SOLICITANTE`) | Registra una solicitud (`ABIERTA`), genera `SOL-AAAA-NNNNN`, valida `previousRequestCode` y registra historial `CREACION` (`201 Created`). |
+| `GET /api/v1/requests/my` | JWT (`SOLICITANTE`) | Lista las solicitudes propias paginadas (`page >= 1`, `size in 1..20`, filtro `status` opcional) (`200 OK`). |
+| `GET /api/v1/requests/{code}` | JWT (`SOLICITANTE` propietario) | Consulta detalle, respuesta/cierre e historial filtrado por privacidad `RF-03` (`200 OK` / `403` / `404`). |
+| `POST /api/v1/requests/{code}/cancel` | JWT (`SOLICITANTE` propietario) | Cancela una solicitud `ABIERTA` (`ABIERTA -> CANCELADA`) vía Patrón State + actualización condicional (`200 OK` / `403` / `404` / `409`). |
 
 ---
 

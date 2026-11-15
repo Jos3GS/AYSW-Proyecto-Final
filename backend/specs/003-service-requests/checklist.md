@@ -1,7 +1,7 @@
 # Checklist de Calidad y Puertas de Aprobación (Quality Gates): 003-service-requests (Backend)
 **Ubicación:** `specs/003-service-requests/checklist.md`  
 **Spec Asociada:** `specs/003-service-requests/spec.md`  
-**Estado:** Aprobado  
+**Estado:** Completado  
 
 ---
 
@@ -22,6 +22,6 @@
 - [x] No quedan puntos pendientes marcados con `[NECESITA ACLARACIÓN]`.
 
 ## 3. Preparación para Implementación (`tasks.md`)
-- [ ] El plan de tareas atómicas (`specs/003-service-requests/tasks.md`) está redactado y aprobado en orden TDD.
-- [ ] Cada tarea de `tasks.md` define su criterio de verificación ejecutable (`ktlintCheck`, `./gradlew test`, `koverVerify`).
-- [ ] Aprobación explícita final para iniciar la implementación de `003-service-requests` (Backend) *(una vez completada la documentación correspondiente)*.
+- [x] El plan de tareas atómicas (`specs/003-service-requests/tasks.md`) está redactado y aprobado en orden TDD.
+- [x] Cada tarea de `tasks.md` define su criterio de verificación ejecutable (`ktlintCheck`, `./gradlew test`, `koverVerify`).
+- [x] Aprobación explícita final para iniciar la implementación de `003-service-requests` (Backend) *(implementación completada y validada con `./gradlew ktlintCheck check koverVerify`)*.

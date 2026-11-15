@@ -60,6 +60,29 @@ object IpMatcher {
         return true
     }
 
+    fun resolveClientIp(
+        remoteHost: String,
+        remoteAddress: String,
+    ): String {
+        if (parseNumericIp(remoteHost) != null) return remoteHost.trim()
+        if (parseNumericIp(remoteAddress) != null) return remoteAddress.trim()
+
+        val candidate = remoteAddress.trim().ifEmpty { remoteHost.trim() }
+        if (candidate.equals("localhost", ignoreCase = true)) {
+            return "127.0.0.1"
+        }
+
+        // En Windows con Docker Desktop, 127.0.0.1 puede resolverse como "kubernetes.docker.internal".
+        val resolvedLoopback =
+            runCatching { InetAddress.getByName(candidate) }
+                .getOrNull()
+                ?.takeIf { it.isLoopbackAddress }
+                ?.hostAddress
+        return resolvedLoopback ?: remoteHost.trim()
+    }
+
+    fun isLoopbackIp(candidateIp: String): Boolean = parseNumericIp(candidateIp)?.isLoopbackAddress == true
+
     private fun parseNumericIp(raw: String): InetAddress? {
         val trimmed = raw.trim().substringBefore('%')
         if (trimmed.isEmpty()) return null
@@ -78,13 +101,11 @@ private val IpAllowListPlugin =
     createApplicationPlugin(name = "IpAllowListPlugin", createConfiguration = ::IpAllowListConfig) {
         val allowedEntries = pluginConfig.allowedIps
         onCall { call ->
-            val rawRemoteHost = call.request.origin.remoteHost
             val normalizedHost =
-                if (rawRemoteHost.equals("localhost", ignoreCase = true)) {
-                    "127.0.0.1"
-                } else {
-                    rawRemoteHost
-                }
+                IpMatcher.resolveClientIp(
+                    remoteHost = call.request.origin.remoteHost,
+                    remoteAddress = call.request.origin.remoteAddress,
+                )
             if (!IpMatcher.isAllowed(normalizedHost, allowedEntries)) {
                 throw DomainException.ForbiddenException(
                     "Acceso denegado para la dirección IP cliente.",
