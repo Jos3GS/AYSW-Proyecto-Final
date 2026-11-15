@@ -20,6 +20,6 @@
 - [x] No quedan puntos pendientes marcados con `[NECESITA ACLARACIÓN]`.
 
 ## 3. Preparación para Implementación (`tasks.md`)
-- [ ] El desglose secuencial en `specs/002-auth-users/tasks.md` está redactado y aprobado en orden TDD.
-- [ ] Cada tarea de `tasks.md` define su criterio de verificación automatizada (`ktlintCheck`, `Ktor MockEngine`, `kotlinx-coroutines-test`, `Compose UI Test`, `koverVerify`).
-- [ ] Aprobación explícita final para iniciar la implementación de `002-auth-users` (Frontend) *(una vez completada la planificación del resto de épicas o autorizada la fase de código)*.
+- [x] El desglose secuencial en `specs/002-auth-users/tasks.md` está redactado y aprobado en orden TDD.
+- [x] Cada tarea de `tasks.md` define su criterio de verificación automatizada (`ktlintCheck`, `Ktor MockEngine`, `kotlinx-coroutines-test`, `Compose UI Test`, `koverVerify`).
+- [x] Aprobación explícita final e implementación completada y verificada de `002-auth-users` (Frontend).

@@ -1,7 +1,7 @@
 # ITM Service Desk (Frontend) - Mapa de Versiones y Ciclo de Vida
 **Ubicación:** `docs/version_map.md`  
-**Versión Actual en Desarrollo:** `v0.1.0-alpha`  
-**Última Actualización:** 2026-11-14  
+**Versión Actual en Desarrollo:** `v0.1.0`  
+**Última Actualización:** 2026-11-15  
 
 ---
 
@@ -26,7 +26,7 @@ flowchart LR
 
 | Versión | Nombre del Hito | Objetivo Principal | Specs / Épicas Incluidas | Trazabilidad HU / RF / RNF | Estado |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **`v0.1.0`** | Shell MVVM, Auth & Personal | Configuración Compose Multiplatform 1.12.2 (Material 3 en español), Koin, Jetpack Navigation, Ktor Client 3.6.x (OkHttp / JS fetch), `SessionStorage` `expect/actual` (`EncryptedSharedPreferences` / `sessionStorage`), Login, Registro público (Tabla 1), cierre de sesión/manejo `401` y módulo de Coordinador para registrar/listar personal interno | `001-project-setup` (✅ Completada), `002-auth-users` (⏳ Pendiente) | **HU-01** (registro), **HU-07**; **RF-01**, **RF-07**; **RNF-01 a RNF-04**, **RNF-06**, **RNF-09** | 🟡 En Progreso |
+| **`v0.1.0`** | Shell MVVM, Auth & Personal | Configuración Compose Multiplatform 1.12.2 (Material 3 en español), Koin, Jetpack Navigation, Ktor Client 3.6.x (OkHttp / JS fetch), `SessionStorage` `expect/actual` (`EncryptedSharedPreferences` / `sessionStorage`), Login, Registro público (Tabla 1), cierre de sesión/manejo `401` y módulo de Coordinador para registrar/listar personal interno | `001-project-setup` (✅ Completada), `002-auth-users` (✅ Completada) | **HU-01** (registro), **HU-07**; **RF-01**, **RF-07**; **RNF-01 a RNF-04**, **RNF-06**, **RNF-09** | ✅ Completada |
 | **`v0.2.0`** | Flujos de Solicitud y Atención | Pantallas por rol: registro de solicitudes (Tabla 2 + solicitud previa opcional), mis solicitudes paginadas (20/pág) con filtro de estado, detalle con código visible, formato `dd/mm/aaaa hh:mm` (`America/Bogota`) y confirmación de cancelación; bandeja de Coordinador para asignar/priorizar/reasignar; bandeja de Personal asignado (marca `Vencida`, intervenciones, escalamiento y confirmación de respuesta) | `003-service-requests`, `004-attention-lifecycle` | **HU-01** (solicitud), **HU-02**, **HU-03**, **HU-04**, **HU-05**; **RF-02 a RF-05**; **RNF-06**, **RNF-07**, **RNF-09** | ⚪ Planificado |
 | **`v0.3.0`** | Panel Consolidado de Coordinación | Vista ejecutiva para Coordinador con totales por estado, categoría, prioridad, responsable, vencidas y resueltas dentro/fuera de plazo; filtros dinámicos (rango de fechas, categoría, prioridad, responsable) y acceso al listado general + detalle/historial completo | `005-coordination-reports` | **HU-06**; **RF-06**; **RNF-03**, **RNF-07**, **RNF-09** | ⚪ Planificado |
 | **`v1.0.0`** | Release v1.0 & Quality Gate | Validación responsiva completa en Web (`wasmJs`: Chrome, Firefox, Edge) y Android (`minSdk 26`, `targetSdk` 35/36), verificación de cero datos simulados en producción, cobertura $\ge 90\%$ (`kotlin-test`, `kotlinx-coroutines-test`, `Ktor MockEngine`, `Compose UI Test`), `ktlint 1.8.x` y auditoría `converge.md` | `006-hardening-release` | **RNF-01 a RNF-10** (auditoría completa de UI, seguridad y alcance) | ⚪ Planificado |
@@ -64,6 +64,16 @@ flowchart LR
 ---
 
 ## 5. Changelog / Registro Histórico
+
+### [v0.1.0] - 2026-11-15
+#### Added
+- Épica `002-auth-users` implementada y verificada (`T01` a `T07`):
+  - Modelos de dominio, contratos de repositorio y `UserFormValidator` multiplataforma (`Char.isLetter()`, `Char.isDigit()`, tope BCrypt 72 bytes UTF-8).
+  - DTOs `@Serializable` (`RegisterRequestDto` sin campo `role` y `toString()` enmascarado), mappers (`AuthMapper`, `StaffMapper`, `StaffUiMapper`), data sources remotos y exclusión de `/api/v1/auth/{login,register,logout}` del disparo global `SessionExpired` en `HttpClientFactory`.
+  - Repositorios `AuthRepositoryImpl` (cierre de sesión resiliente en `204` y `401`) y `StaffRepositoryImpl` (paginación uniforme `size = 20`).
+  - ViewModels MVVM (`SessionViewModel`, `LoginViewModel`, `RegisterViewModel`, `StaffListViewModel`, `CreateStaffViewModel`) con `UiState` inmutables, enmascaramiento de secretos y cableado Koin.
+  - Componentes compartidos (`ConfirmationDialog`, `PasswordTextField`, `AuthenticatedTopBar`, `RequireRole`), pantallas (`LoginScreen`, `RegisterScreen`, `ApplicantHomeScreen`, `AgentHomeScreen`, `CoordinatorHomeScreen`, `StaffListScreen`, `CreateStaffScreen`) y navegación tipada con guardas RBAC en `AppNavHost`.
+  - Suite completa de pruebas unitarias, `MockEngine` y `Compose UI Test` pasando en Android y `wasmJs`, `ktlintCheck` limpio y cobertura Kover $\ge 90\%$.
 
 ### [v0.1.0-alpha] - 2026-11-14
 #### Added

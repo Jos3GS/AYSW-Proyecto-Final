@@ -3,7 +3,14 @@ package com.itm.servicedesk.core.di
 import com.itm.servicedesk.core.storage.SessionEvent
 import com.itm.servicedesk.core.storage.SessionEventBus
 import com.itm.servicedesk.core.storage.SessionStorage
+import com.itm.servicedesk.domain.repository.AuthRepository
+import com.itm.servicedesk.domain.repository.StaffRepository
 import com.itm.servicedesk.domain.repository.SystemHealthRepository
+import com.itm.servicedesk.viewmodel.CreateStaffViewModel
+import com.itm.servicedesk.viewmodel.LoginViewModel
+import com.itm.servicedesk.viewmodel.RegisterViewModel
+import com.itm.servicedesk.viewmodel.SessionViewModel
+import com.itm.servicedesk.viewmodel.StaffListViewModel
 import com.itm.servicedesk.viewmodel.StartupViewModel
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.HttpClientEngine
@@ -108,6 +115,13 @@ class AppModulesTest {
             val client = koin.get<HttpClient>()
             assertNotNull(client)
             assertNotNull(koin.get<SystemHealthRepository>())
+            assertNotNull(koin.get<AuthRepository>())
+            assertNotNull(koin.get<StaffRepository>())
+            assertNotNull(koin.get<SessionViewModel>())
+            assertNotNull(koin.get<LoginViewModel>())
+            assertNotNull(koin.get<RegisterViewModel>())
+            assertNotNull(koin.get<StaffListViewModel>())
+            assertNotNull(koin.get<CreateStaffViewModel>())
             val viewModel = koin.get<StartupViewModel>()
             advanceUntilIdle()
             assertIs<com.itm.servicedesk.viewmodel.StartupUiState.Ready>(viewModel.uiState.value)
