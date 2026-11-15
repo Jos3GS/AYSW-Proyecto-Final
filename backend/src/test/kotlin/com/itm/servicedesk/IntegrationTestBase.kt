@@ -35,7 +35,7 @@ abstract class IntegrationTestBase {
                 secret = "test_jwt_secret_at_least_32_characters_long_1234",
                 issuer = "itm-service-desk",
                 audience = "itm-service-desk-clients",
-                expirationHours = 1L,
+                expirationSeconds = 3600L,
             ).seedCoordinator(
                 fullName = "Coordinador General ITM",
                 documentNumber = "1000000001",
@@ -51,9 +51,17 @@ abstract class IntegrationTestBase {
     }
 
     protected fun cleanUsersTable(connection: DatabaseConnection) {
+        cleanAuthTables(connection)
+    }
+
+    protected fun cleanAuthTables(connection: DatabaseConnection) {
         connection.dataSource.connection.use { conn ->
             conn.createStatement().use { stmt ->
+                stmt.executeUpdate("DELETE FROM revoked_tokens")
                 stmt.executeUpdate("DELETE FROM users")
+            }
+            if (!conn.autoCommit) {
+                conn.commit()
             }
         }
     }

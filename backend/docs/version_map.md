@@ -1,7 +1,7 @@
 # ITM Service Desk (Backend) - Mapa de Versiones y Ciclo de Vida
 **Ubicación:** `docs/version_map.md`  
-**Versión Actual en Desarrollo:** `v0.1.0-alpha`  
-**Última Actualización:** 2026-11-13  
+**Versión Actual en Desarrollo:** `v0.1.0`  
+**Última Actualización:** 2026-11-15  
 
 ---
 
@@ -26,7 +26,7 @@ flowchart LR
 
 | Versión | Nombre del Hito | Objetivo Principal | Specs / Épicas Incluidas | Trazabilidad HU / RF / RNF | Estado |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **`v0.1.0`** | Foundation, Auth & Personal | Arquitectura en capas, Ktor Netty, HikariCP + Flyway (usuario semilla Coordinador), registro público de solicitantes, login JWT (1h) con BCrypt, RBAC y gestión de personal interno | `001-project-setup`, `002-auth-users` | **HU-01** (registro), **HU-07**; **RF-01**, **RF-07**; **RNF-01 a RNF-04**, **RNF-06**, **RNF-08** | 🟡 En Progreso |
+| **`v0.1.0`** | Foundation, Auth & Personal | Arquitectura en capas, Ktor Netty, HikariCP + Flyway (usuario semilla Coordinador), registro público de solicitantes, login JWT (1h) con BCrypt, RBAC y gestión de personal interno | `001-project-setup`, `002-auth-users` | **HU-01** (registro), **HU-07**; **RF-01**, **RF-07**; **RNF-01 a RNF-04**, **RNF-06**, **RNF-08** | 🟢 Completado |
 | **`v0.2.0`** | Core Service Desk & Trazabilidad | Registro de solicitudes (`SOL-AAAA-NNNNN`, Builder), consulta/cancelación, bandeja y asignación/priorización (SLA 24h/72h/120h), máquina de estados (Patrón State), intervenciones, escalamiento, respuesta final, historial inmutable y cierre automático (24h) | `003-service-requests`, `004-attention-lifecycle` | **HU-01** (solicitud), **HU-02**, **HU-03**, **HU-04**, **HU-05**; **RF-02 a RF-05**; **RNF-05 a RNF-09** | ⚪ Planificado |
 | **`v0.3.0`** | Coordinación & Reportes Consolidados | Resumen consolidado para Coordinación (totales por estado, categoría, prioridad, responsable, vencidas y dentro/fuera de plazo), filtros combinados (Builder) y listado general paginado | `005-coordination-reports` | **HU-06**; **RF-06**; **RNF-03**, **RNF-07** | ⚪ Planificado |
 | **`v1.0.0`** | Release v1.0 & Quality Gate | Cumplimiento integral RNF-01 a RNF-10 (rendimiento `< 2s` con 1000 solicitudes, paginación 20/pág, zona horaria `America/Bogota`, `.env.example`, README local), cobertura $\ge 90\%$ con Testcontainers PostgreSQL, `ktlint 1.8.x` y auditoría `converge.md` | `006-hardening-release` | **RNF-01 a RNF-10** (auditoría completa de alcance y calidad) | ⚪ Planificado |
@@ -39,7 +39,7 @@ flowchart LR
 
 ```text
 [001-project-setup] (Ktor Netty 3.6.x, Exposed DSL 1.6.x, HikariCP, Flyway, ktlint 1.8.x, Testcontainers)
-     └── [002-auth-users] (RF-01, RF-07: Registro solicitante, Login JWT 8h + BCrypt, RBAC, Personal interno + Semilla Coordinador)
+     └── [002-auth-users] (RF-01, RF-07: Registro solicitante, Login JWT 1h + BCrypt, RBAC, Personal interno + Semilla Coordinador)
               └── [003-service-requests] (RF-02, RF-03: Builder de solicitudes, SOL-AAAA-NNNNN, solicitud previa, listado paginado y cancelación)
                        └── [004-attention-lifecycle] (RF-04, RF-05: State Pattern Tablas 3-4, SLA Tabla 5, intervenciones, escalamiento, respuesta, historial inmutable y cierre auto 24h)
                                 └── [005-coordination-reports] (RF-06: Totales consolidados, métricas de plazo y filtros con Builder)
@@ -64,6 +64,15 @@ flowchart LR
 ---
 
 ## 5. Changelog / Registro Histórico
+
+### [v0.1.0] - 2026-11-15
+#### Added
+- Implementación completa y verificada de **`002-auth-users`**:
+  - Migración Flyway `V2__create_revoked_tokens_table.sql` (`revoked_tokens` e índice `idx_revoked_tokens_expires_at`) y alineación de `JwtConfig` / `.env.example` a `JWT_EXPIRATION_SECONDS=3600`.
+  - Capa de dominio pura (`User`, `UserProfile`, `StaffSummary`, `IssuedToken`, `AuthSession`, `AuthenticatedIdentity`, `PagedResult`), Builders (`AuthSessionBuilder`, `StaffPageQueryBuilder`) y validador acumulativo de Tabla 1 (`UserValidator`).
+  - Repositorios Exposed 1.6.x DSL (`ExposedUserRepository` con mapeo atómico de `SQLState 23505` a `409 Conflict`, `ExposedRevokedTokenRepository` con revocación idempotente y purga de expirados).
+  - Servicios de seguridad y aplicación (`BcryptPasswordHasher` costo 12 con hash dummy anti-enumeración, `JwtTokenService` HMAC256 `1h`, `AuthService`, `StaffService`).
+  - Seguridad HTTP Ktor (`JwtAuthConfig`, `RoleAuthorizationPlugin` con `withRole(...)`), DTOs `@Serializable` (`ignoreUnknownKeys = false`), rutas `/api/v1/auth/{register,login,me,logout}` y `/api/v1/users/staff`, validado con `ktlintCheck`, Testcontainers PostgreSQL 18 y Kover ($\ge 90\%$).
 
 ### [v0.1.0-alpha] - 2026-11-14
 #### Added

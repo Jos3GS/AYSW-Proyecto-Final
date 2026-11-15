@@ -21,6 +21,6 @@
 - [x] No quedan puntos pendientes marcados con `[NECESITA ACLARACIÓN]`.
 
 ## 3. Preparación para Implementación (`tasks.md`)
-- [ ] El plan de tareas atómicas (`specs/002-auth-users/tasks.md`) está redactado y aprobado en orden TDD.
-- [ ] Cada tarea de `tasks.md` define su criterio de verificación ejecutable (`ktlintCheck`, `./gradlew test`, `koverVerify`).
-- [ ] Aprobación explícita final para iniciar la implementación de `002-auth-users` (Backend) *(una vez que Frontend `002-auth-users` y demás épicas o fases previas estén listas según la planificación del proyecto)*.
+- [x] El plan de tareas atómicas (`specs/002-auth-users/tasks.md`) está redactado y aprobado en orden TDD.
+- [x] Cada tarea de `tasks.md` define su criterio de verificación ejecutable (`ktlintCheck`, `./gradlew test`, `koverVerify`).
+- [x] Aprobación explícita final para iniciar la implementación de `002-auth-users` (Backend) *(implementación verificada y en verde sobre PostgreSQL 18)*.
