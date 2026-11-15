@@ -63,8 +63,12 @@ object EnvConfig {
         val jwtSecret = env["JWT_SECRET"] ?: ""
         val jwtIssuer = env["JWT_ISSUER"] ?: DEFAULT_JWT_ISSUER
         val jwtAudience = env["JWT_AUDIENCE"] ?: DEFAULT_JWT_AUDIENCE
-        val jwtExpirationHours =
-            env["JWT_EXPIRATION_HOURS"]?.let { it.toLongOrNull() ?: -1L } ?: DEFAULT_JWT_EXPIRATION_HOURS
+        val jwtExpirationSeconds =
+            env["JWT_EXPIRATION_SECONDS"]?.let { it.toLongOrNull() ?: -1L }
+                ?: env["JWT_EXPIRATION_HOURS"]?.let { hours ->
+                    hours.toLongOrNull()?.let { if (it > 0L) it * 3600L else -1L } ?: -1L
+                }
+                ?: DEFAULT_JWT_EXPIRATION_SECONDS
 
         val seedName = env["SEED_COORDINATOR_NAME"] ?: ""
         val seedDocument = env["SEED_COORDINATOR_DOCUMENT"] ?: ""
@@ -87,7 +91,7 @@ object EnvConfig {
                 secret = jwtSecret,
                 issuer = jwtIssuer,
                 audience = jwtAudience,
-                expirationHours = jwtExpirationHours,
+                expirationSeconds = jwtExpirationSeconds,
             ).seedCoordinator(
                 fullName = seedName,
                 documentNumber = seedDocument,
@@ -120,6 +124,6 @@ object EnvConfig {
     private const val DEFAULT_MAX_POOL_SIZE = 10
     private const val DEFAULT_JWT_ISSUER = "itm-service-desk"
     private const val DEFAULT_JWT_AUDIENCE = "itm-service-desk-clients"
-    private const val DEFAULT_JWT_EXPIRATION_HOURS = 1L
+    private const val DEFAULT_JWT_EXPIRATION_SECONDS = 3600L
     private val DEFAULT_ALLOWED_IPS = listOf("127.0.0.1", "::1")
 }

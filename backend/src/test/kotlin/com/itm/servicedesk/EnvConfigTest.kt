@@ -72,7 +72,6 @@ class EnvConfigTest {
         assertEquals(listOf("127.0.0.1", "::1"), config.server.allowedClientIps)
         assertEquals(listOf("http://localhost:8081", "http://127.0.0.1:8081"), config.server.corsAllowedOrigins)
         assertEquals(10, config.database.maxPoolSize)
-        assertEquals(1L, config.jwt.expirationHours)
         assertEquals(3600L, config.jwt.expirationSeconds)
         assertEquals("coordinador@itm.edu.co", config.seedCoordinator.email)
     }

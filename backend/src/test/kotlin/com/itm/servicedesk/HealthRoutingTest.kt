@@ -211,7 +211,7 @@ class HealthRoutingTest : IntegrationTestBase() {
                     secret = "test_jwt_secret_at_least_32_characters_long_1234",
                     issuer = "itm-service-desk",
                     audience = "itm-service-desk-clients",
-                    expirationHours = 1L,
+                    expirationSeconds = 3600L,
                 ).seedCoordinator(
                     fullName = "Coordinador General ITM",
                     documentNumber = "1000000001",

@@ -25,7 +25,7 @@ class AppConfigBuilderTest {
                 secret = "super_secret_jwt_key_with_more_than_32_chars",
                 issuer = "itm-service-desk",
                 audience = "itm-service-desk-clients",
-                expirationHours = 1L,
+                expirationSeconds = 3600L,
             ).seedCoordinator(
                 fullName = "Coordinador General ITM",
                 documentNumber = "1000000001",
@@ -39,7 +39,6 @@ class AppConfigBuilderTest {
         val config = validBuilder().build()
 
         assertEquals(8080, config.server.port)
-        assertEquals(1L, config.jwt.expirationHours)
         assertEquals(3600L, config.jwt.expirationSeconds)
         assertEquals("coordinador@itm.edu.co", config.seedCoordinator.email)
 
@@ -91,7 +90,7 @@ class AppConfigBuilderTest {
                     secret = "short",
                     issuer = "",
                     audience = "",
-                    expirationHours = 0,
+                    expirationSeconds = 0,
                 ).seedCoordinator(
                     fullName = "12",
                     documentNumber = "abc",

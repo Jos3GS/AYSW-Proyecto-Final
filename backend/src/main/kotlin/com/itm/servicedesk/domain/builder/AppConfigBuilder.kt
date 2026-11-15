@@ -30,14 +30,11 @@ data class JwtConfig(
     val secret: String,
     val issuer: String,
     val audience: String,
-    val expirationHours: Long = 1L,
+    val expirationSeconds: Long = 3600L,
 ) {
-    val expirationSeconds: Long
-        get() = expirationHours * 3600L
-
     override fun toString(): String =
         "JwtConfig(secret='***', issuer='$issuer', audience='$audience', " +
-            "expirationHours=$expirationHours)"
+            "expirationSeconds=$expirationSeconds)"
 }
 
 data class SeedCoordinatorConfig(
@@ -75,7 +72,7 @@ class AppConfigBuilder {
     private var jwtSecret: String = ""
     private var jwtIssuer: String = "itm-service-desk"
     private var jwtAudience: String = "itm-service-desk-clients"
-    private var jwtExpirationHours: Long = 1L
+    private var jwtExpirationSeconds: Long = 3600L
 
     private var seedFullName: String = ""
     private var seedDocumentNumber: String = ""
@@ -117,13 +114,13 @@ class AppConfigBuilder {
         secret: String,
         issuer: String,
         audience: String,
-        expirationHours: Long = 1L,
+        expirationSeconds: Long = 3600L,
     ): AppConfigBuilder =
         apply {
             this.jwtSecret = secret
             this.jwtIssuer = issuer.trim()
             this.jwtAudience = audience.trim()
-            this.jwtExpirationHours = expirationHours
+            this.jwtExpirationSeconds = expirationSeconds
         }
 
     fun seedCoordinator(
@@ -178,7 +175,7 @@ class AppConfigBuilder {
                     secret = jwtSecret,
                     issuer = jwtIssuer,
                     audience = jwtAudience,
-                    expirationHours = jwtExpirationHours,
+                    expirationSeconds = jwtExpirationSeconds,
                 ),
             seedCoordinator =
                 SeedCoordinatorConfig(
@@ -263,8 +260,8 @@ class AppConfigBuilder {
         if (jwtAudience.isBlank()) {
             details.add(ValidationDetail("JWT_AUDIENCE", "JWT_AUDIENCE es obligatorio."))
         }
-        if (jwtExpirationHours <= 0L) {
-            details.add(ValidationDetail("JWT_EXPIRATION_HOURS", "JWT_EXPIRATION_HOURS debe ser mayor a 0."))
+        if (jwtExpirationSeconds <= 0L) {
+            details.add(ValidationDetail("JWT_EXPIRATION_SECONDS", "JWT_EXPIRATION_SECONDS debe ser mayor a 0."))
         }
     }
 
