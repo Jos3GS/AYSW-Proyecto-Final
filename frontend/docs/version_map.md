@@ -1,7 +1,7 @@
 # ITM Service Desk (Frontend) - Mapa de Versiones y Ciclo de Vida
 **Ubicación:** `docs/version_map.md`  
 **Versión Actual en Desarrollo:** `v0.1.0-alpha`  
-**Última Actualización:** 2026-11-13  
+**Última Actualización:** 2026-11-14  
 
 ---
 
@@ -26,7 +26,7 @@ flowchart LR
 
 | Versión | Nombre del Hito | Objetivo Principal | Specs / Épicas Incluidas | Trazabilidad HU / RF / RNF | Estado |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **`v0.1.0`** | Shell MVVM, Auth & Personal | Configuración Compose Multiplatform 1.12.2 (Material 3 en español), Koin, Jetpack Navigation, Ktor Client 3.6.x (OkHttp / JS fetch), `SessionStorage` `expect/actual` (`EncryptedSharedPreferences` / `sessionStorage`), Login, Registro público (Tabla 1), cierre de sesión/manejo `401` y módulo de Coordinador para registrar/listar personal interno | `001-project-setup`, `002-auth-users` | **HU-01** (registro), **HU-07**; **RF-01**, **RF-07**; **RNF-01 a RNF-04**, **RNF-06**, **RNF-09** | 🟡 En Progreso |
+| **`v0.1.0`** | Shell MVVM, Auth & Personal | Configuración Compose Multiplatform 1.12.2 (Material 3 en español), Koin, Jetpack Navigation, Ktor Client 3.6.x (OkHttp / JS fetch), `SessionStorage` `expect/actual` (`EncryptedSharedPreferences` / `sessionStorage`), Login, Registro público (Tabla 1), cierre de sesión/manejo `401` y módulo de Coordinador para registrar/listar personal interno | `001-project-setup` (✅ Completada), `002-auth-users` (⏳ Pendiente) | **HU-01** (registro), **HU-07**; **RF-01**, **RF-07**; **RNF-01 a RNF-04**, **RNF-06**, **RNF-09** | 🟡 En Progreso |
 | **`v0.2.0`** | Flujos de Solicitud y Atención | Pantallas por rol: registro de solicitudes (Tabla 2 + solicitud previa opcional), mis solicitudes paginadas (20/pág) con filtro de estado, detalle con código visible, formato `dd/mm/aaaa hh:mm` (`America/Bogota`) y confirmación de cancelación; bandeja de Coordinador para asignar/priorizar/reasignar; bandeja de Personal asignado (marca `Vencida`, intervenciones, escalamiento y confirmación de respuesta) | `003-service-requests`, `004-attention-lifecycle` | **HU-01** (solicitud), **HU-02**, **HU-03**, **HU-04**, **HU-05**; **RF-02 a RF-05**; **RNF-06**, **RNF-07**, **RNF-09** | ⚪ Planificado |
 | **`v0.3.0`** | Panel Consolidado de Coordinación | Vista ejecutiva para Coordinador con totales por estado, categoría, prioridad, responsable, vencidas y resueltas dentro/fuera de plazo; filtros dinámicos (rango de fechas, categoría, prioridad, responsable) y acceso al listado general + detalle/historial completo | `005-coordination-reports` | **HU-06**; **RF-06**; **RNF-03**, **RNF-07**, **RNF-09** | ⚪ Planificado |
 | **`v1.0.0`** | Release v1.0 & Quality Gate | Validación responsiva completa en Web (`wasmJs`: Chrome, Firefox, Edge) y Android (`minSdk 26`, `targetSdk` 35/36), verificación de cero datos simulados en producción, cobertura $\ge 90\%$ (`kotlin-test`, `kotlinx-coroutines-test`, `Ktor MockEngine`, `Compose UI Test`), `ktlint 1.8.x` y auditoría `converge.md` | `006-hardening-release` | **RNF-01 a RNF-10** (auditoría completa de UI, seguridad y alcance) | ⚪ Planificado |
@@ -65,7 +65,9 @@ flowchart LR
 
 ## 5. Changelog / Registro Histórico
 
-### [v0.1.0-alpha] - 2026-11-13
+### [v0.1.0-alpha] - 2026-11-14
 #### Added
 - Constitución del proyecto Frontend (`frontend/.specify/memory/constitution.md` v1.0.0).
 - Definición del mapa de versiones alineado con **HU-01 a HU-07**, **RF-01 a RF-07**, **RNF-01 a RNF-10** y los hitos del Backend.
+- Épica `001-project-setup` implementada y verificada: estructura KMP + Compose Multiplatform (`androidTarget` + `wasmJs`), `BuildKonfig`, `DateFormatter` (`America/Bogota`, `dd/mm/aaaa hh:mm`), `SessionStorage` `expect/actual`, `HttpClientFactory` con interceptor JWT/401, `SystemHealthRepository`, Koin DI, `StartupScreen` + `AppNavHost`, `ktlint` y cobertura Kover $\ge 90\%$.
+
