@@ -50,14 +50,16 @@ object StartupTestTags {
 fun StartupRoute(
     viewModel: StartupViewModel = koinViewModel(),
     snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
+    onHealthCheckReady: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
     LaunchedEffect(viewModel) {
         viewModel.events.collect { event ->
-            if (event is StartupEvent.ShowErrorBanner) {
-                snackbarHostState.showSnackbar(event.message)
+            when (event) {
+                StartupEvent.HealthCheckSucceeded -> onHealthCheckReady()
+                is StartupEvent.ShowErrorBanner -> snackbarHostState.showSnackbar(event.message)
             }
         }
     }

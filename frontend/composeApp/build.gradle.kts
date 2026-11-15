@@ -31,8 +31,34 @@ kotlin {
                 outputFileName = "composeApp.js"
             }
             testTask {
+                val firefoxBinary =
+                    listOfNotNull(
+                        System.getenv("FIREFOX_BIN"),
+                        "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+                        "/usr/bin/firefox",
+                    ).firstOrNull { file(it).exists() }
+
+                val chromeBinary =
+                    listOfNotNull(
+                        System.getenv("CHROME_BIN"),
+                        "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+                        "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+                        "/usr/bin/google-chrome",
+                        "/usr/bin/chromium",
+                        "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+                        "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
+                    ).firstOrNull { file(it).exists() }
+
+                if (firefoxBinary == null && chromeBinary != null && System.getenv("CHROME_BIN").isNullOrBlank()) {
+                    environment("CHROME_BIN", chromeBinary)
+                }
+
                 useKarma {
-                    useFirefoxHeadless()
+                    if (firefoxBinary != null) {
+                        useFirefoxHeadless()
+                    } else {
+                        useChromeHeadless()
+                    }
                 }
             }
         }

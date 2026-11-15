@@ -33,6 +33,9 @@ private val PUBLIC_API_PATHS =
         "/api/v1/auth/register",
     )
 
+private val SESSION_EXPIRED_EXCLUDED_PATHS =
+    PUBLIC_API_PATHS + "/api/v1/auth/logout"
+
 fun createHttpClient(
     engine: HttpClientEngine,
     baseUrl: String,
@@ -59,6 +62,8 @@ fun createHttpClient(
     client.plugin(HttpSend).intercept { request ->
         val path = request.url.encodedPath
         val isPublicRoute = PUBLIC_API_PATHS.any { publicPath -> path == publicPath }
+        val isExcludedFromSessionExpired =
+            SESSION_EXPIRED_EXCLUDED_PATHS.any { excludedPath -> path == excludedPath }
 
         if (!isPublicRoute) {
             val token = sessionStorage.getToken()
@@ -69,7 +74,7 @@ fun createHttpClient(
 
         val call = execute(request)
 
-        if (!isPublicRoute && call.response.status == HttpStatusCode.Unauthorized) {
+        if (!isExcludedFromSessionExpired && call.response.status == HttpStatusCode.Unauthorized) {
             sessionStorage.clearToken()
             sessionEventBus.emit(SessionEvent.SessionExpired)
         }

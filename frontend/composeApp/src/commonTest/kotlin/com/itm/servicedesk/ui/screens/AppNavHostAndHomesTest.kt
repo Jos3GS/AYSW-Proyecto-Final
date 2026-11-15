@@ -1,0 +1,344 @@
+package com.itm.servicedesk.ui.screens
+
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.v2.runComposeUiTest
+import com.itm.servicedesk.core.storage.SessionEventBus
+import com.itm.servicedesk.core.storage.SessionStorage
+import com.itm.servicedesk.data.mapper.StaffUiMapper
+import com.itm.servicedesk.domain.model.AppResult
+import com.itm.servicedesk.domain.model.ServiceHealth
+import com.itm.servicedesk.domain.model.UserRole
+import com.itm.servicedesk.domain.repository.AuthRepository
+import com.itm.servicedesk.domain.repository.StaffRepository
+import com.itm.servicedesk.domain.repository.SystemHealthRepository
+import com.itm.servicedesk.testing.AuthTestFixtures
+import com.itm.servicedesk.testing.FakeAuthRepository
+import com.itm.servicedesk.testing.FakeStaffRepository
+import com.itm.servicedesk.testing.InMemoryTestSessionStorage
+import com.itm.servicedesk.ui.components.ConfirmDialogTestTags
+import com.itm.servicedesk.ui.components.TopBarTestTags
+import com.itm.servicedesk.ui.navigation.ServiceDeskAppRoot
+import com.itm.servicedesk.ui.screens.auth.LoginTestTags
+import com.itm.servicedesk.ui.screens.auth.RegisterTestTags
+import com.itm.servicedesk.ui.screens.home.AgentHomeScreen
+import com.itm.servicedesk.ui.screens.home.CoordinatorHomeScreen
+import com.itm.servicedesk.ui.screens.home.HomeTestTags
+import com.itm.servicedesk.ui.screens.staff.CreateStaffTestTags
+import com.itm.servicedesk.ui.screens.staff.StaffListTestTags
+import com.itm.servicedesk.ui.theme.ServiceDeskTheme
+import com.itm.servicedesk.viewmodel.CreateStaffViewModel
+import com.itm.servicedesk.viewmodel.LoginViewModel
+import com.itm.servicedesk.viewmodel.RegisterViewModel
+import com.itm.servicedesk.viewmodel.SessionViewModel
+import com.itm.servicedesk.viewmodel.StaffListViewModel
+import com.itm.servicedesk.viewmodel.StartupUiMapper
+import com.itm.servicedesk.viewmodel.StartupViewModel
+import org.koin.core.context.startKoin
+import org.koin.core.context.stopKoin
+import org.koin.core.module.dsl.viewModel
+import org.koin.dsl.module
+import kotlin.test.AfterTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.time.Instant
+
+private class NavFakeHealthRepository : SystemHealthRepository {
+    override suspend fun checkHealth(): AppResult<ServiceHealth> =
+        AppResult.Success(
+            ServiceHealth(
+                isServiceUp = true,
+                isDatabaseUp = true,
+                serviceName = "itm-service-desk-backend",
+                checkedAt = Instant.parse("2026-11-14T11:24:00-05:00"),
+            ),
+        )
+}
+
+@OptIn(ExperimentalTestApi::class)
+class AppNavHostAndHomesTest : ComposeUiTestBase() {
+    @AfterTest
+    fun tearDownKoin() {
+        stopKoin()
+    }
+
+    private fun startTestKoin(
+        initialToken: String? = null,
+        authRepository: AuthRepository = FakeAuthRepository(),
+        staffRepository: StaffRepository = FakeStaffRepository(),
+    ) {
+        stopKoin()
+        startKoin {
+            modules(
+                module {
+                    single { SessionEventBus() }
+                    single<SessionStorage> { InMemoryTestSessionStorage(initialToken = initialToken) }
+                    single<SystemHealthRepository> { NavFakeHealthRepository() }
+                    single { authRepository }
+                    single { staffRepository }
+                    single { StaffUiMapper() }
+                    factory { StartupUiMapper() }
+                    viewModel { StartupViewModel(repository = get(), uiMapper = get()) }
+                    viewModel {
+                        SessionViewModel(
+                            authRepository = get(),
+                            sessionStorage = get(),
+                            sessionEventBus = get(),
+                        )
+                    }
+                    viewModel { LoginViewModel(authRepository = get()) }
+                    viewModel { RegisterViewModel(authRepository = get()) }
+                    viewModel { StaffListViewModel(staffRepository = get(), staffUiMapper = get()) }
+                    viewModel { CreateStaffViewModel(staffRepository = get(), staffUiMapper = get()) }
+                },
+            )
+        }
+    }
+
+    @Test
+    fun `CoordinatorHomeScreen renders user details and triggers actions`() =
+        runComposeUiTest {
+            var manageStaffClicks = 0
+            var coordinatorLogoutClicks = 0
+
+            val coordinator =
+                AuthTestFixtures.userProfile(
+                    fullName = "Ana Sofía Coordinator",
+                    email = "ana.coord@itm.edu.co",
+                    role = UserRole.COORDINADOR,
+                )
+
+            setContent {
+                ServiceDeskTheme {
+                    CoordinatorHomeScreen(
+                        user = coordinator,
+                        onManageStaffClick = { manageStaffClicks += 1 },
+                        onLogoutClick = { coordinatorLogoutClicks += 1 },
+                    )
+                }
+            }
+
+            onNodeWithTag(HomeTestTags.COORDINATOR_HOME).assertIsDisplayed()
+            onNodeWithText("Bienvenido, Ana Sofía Coordinator").assertIsDisplayed()
+            onNodeWithTag(HomeTestTags.MANAGE_STAFF_BUTTON).performClick()
+            onNodeWithTag(TopBarTestTags.LOGOUT_BUTTON).performClick()
+
+            assertEquals(1, manageStaffClicks)
+            assertEquals(1, coordinatorLogoutClicks)
+        }
+
+    @Test
+    fun `AgentHomeScreen renders user details and triggers logout action`() =
+        runComposeUiTest {
+            var agentLogoutClicks = 0
+            val agent =
+                AuthTestFixtures.userProfile(
+                    fullName = "Carlos Mejía",
+                    email = "carlos.mejia@itm.edu.co",
+                    role = UserRole.PERSONAL_ATENCION,
+                )
+
+            setContent {
+                ServiceDeskTheme {
+                    AgentHomeScreen(
+                        user = agent,
+                        onLogoutClick = { agentLogoutClicks += 1 },
+                    )
+                }
+            }
+
+            onNodeWithTag(HomeTestTags.AGENT_HOME).assertIsDisplayed()
+            onNodeWithText("Bienvenido, Carlos Mejía").assertIsDisplayed()
+            onNodeWithTag(TopBarTestTags.LOGOUT_BUTTON).performClick()
+            assertEquals(1, agentLogoutClicks)
+        }
+
+    @Test
+    fun `AppNavHost navigates Login to Register and auto-logs in to ApplicantHome`() =
+        runComposeUiTest {
+            val applicantSession =
+                AuthTestFixtures.authSession(
+                    user = AuthTestFixtures.userProfile(role = UserRole.SOLICITANTE),
+                )
+            startTestKoin(
+                initialToken = null,
+                authRepository =
+                    FakeAuthRepository(
+                        registerHandler = { AppResult.Success(applicantSession) },
+                    ),
+            )
+
+            setContent {
+                ServiceDeskAppRoot()
+            }
+
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(LoginTestTags.EMAIL_INPUT).fetchSemanticsNodes().isNotEmpty()
+            }
+            onNodeWithTag(LoginTestTags.GO_REGISTER_BUTTON).performScrollTo().performClick()
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(RegisterTestTags.FULL_NAME_INPUT).fetchSemanticsNodes().isNotEmpty()
+            }
+
+            onNodeWithTag(RegisterTestTags.FULL_NAME_INPUT).performScrollTo().performTextInput("Laura Gómez")
+            onNodeWithTag(RegisterTestTags.DOCUMENT_INPUT).performScrollTo().performTextInput("1020304050")
+            onNodeWithTag(RegisterTestTags.EMAIL_INPUT).performScrollTo().performTextInput("laura@itm.edu.co")
+            onNodeWithTag(RegisterTestTags.PHONE_INPUT).performScrollTo().performTextInput("3001234567")
+            onNodeWithTag(RegisterTestTags.PASSWORD_INPUT).performScrollTo().performTextInput("Clave1234")
+            onNodeWithTag(RegisterTestTags.SUBMIT_BUTTON).performScrollTo().performClick()
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(HomeTestTags.APPLICANT_HOME).fetchSemanticsNodes().isNotEmpty()
+            }
+
+            onNodeWithTag(HomeTestTags.APPLICANT_HOME).assertIsDisplayed()
+        }
+
+    @Test
+    fun `AppNavHost confirms Logout from ApplicantHome back to Login with notice`() =
+        runComposeUiTest {
+            val applicant = AuthTestFixtures.userProfile(role = UserRole.SOLICITANTE)
+            startTestKoin(
+                initialToken = "valid-applicant-jwt",
+                authRepository =
+                    FakeAuthRepository(
+                        getCurrentUserHandler = { AppResult.Success(applicant) },
+                    ),
+            )
+
+            setContent {
+                ServiceDeskAppRoot()
+            }
+
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(HomeTestTags.APPLICANT_HOME).fetchSemanticsNodes().isNotEmpty()
+            }
+            onNodeWithTag(TopBarTestTags.LOGOUT_BUTTON).performClick()
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(ConfirmDialogTestTags.DIALOG).fetchSemanticsNodes().isNotEmpty()
+            }
+
+            onNodeWithTag(ConfirmDialogTestTags.ACCEPT_BUTTON).performClick()
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(LoginTestTags.NOTICE_BANNER).fetchSemanticsNodes().isNotEmpty()
+            }
+            onNodeWithTag(LoginTestTags.NOTICE_BANNER).assertIsDisplayed()
+        }
+
+    @Test
+    fun `AppNavHost authenticates Coordinator from Login to CoordinatorHome`() =
+        runComposeUiTest {
+            val coordinator =
+                AuthTestFixtures.userProfile(
+                    fullName = "Coordinadora ITM",
+                    role = UserRole.COORDINADOR,
+                )
+            val coordinatorSession = AuthTestFixtures.authSession(user = coordinator)
+            startTestKoin(
+                initialToken = null,
+                authRepository =
+                    FakeAuthRepository(
+                        loginHandler = { AppResult.Success(coordinatorSession) },
+                    ),
+            )
+
+            setContent {
+                ServiceDeskAppRoot()
+            }
+
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(LoginTestTags.EMAIL_INPUT).fetchSemanticsNodes().isNotEmpty()
+            }
+            onNodeWithTag(LoginTestTags.EMAIL_INPUT).performScrollTo().performTextInput("coord@itm.edu.co")
+            onNodeWithTag(LoginTestTags.PASSWORD_INPUT).performScrollTo().performTextInput("Clave1234")
+            onNodeWithTag(LoginTestTags.SUBMIT_BUTTON).performScrollTo().performClick()
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(HomeTestTags.COORDINATOR_HOME).fetchSemanticsNodes().isNotEmpty()
+            }
+
+            onNodeWithTag(HomeTestTags.COORDINATOR_HOME).assertIsDisplayed()
+        }
+
+    @Test
+    fun `AppNavHost navigates CoordinatorHome to StaffList and CreateStaff with confirmation`() =
+        runComposeUiTest {
+            val coordinator =
+                AuthTestFixtures.userProfile(
+                    fullName = "Coordinadora ITM",
+                    role = UserRole.COORDINADOR,
+                )
+            val staffRepo = FakeStaffRepository()
+            startTestKoin(
+                initialToken = "valid-coord-jwt",
+                authRepository =
+                    FakeAuthRepository(
+                        getCurrentUserHandler = { AppResult.Success(coordinator) },
+                    ),
+                staffRepository = staffRepo,
+            )
+
+            setContent {
+                ServiceDeskAppRoot()
+            }
+
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(HomeTestTags.COORDINATOR_HOME).fetchSemanticsNodes().isNotEmpty()
+            }
+            onNodeWithTag(HomeTestTags.MANAGE_STAFF_BUTTON).performClick()
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(StaffListTestTags.LIST_CONTAINER).fetchSemanticsNodes().isNotEmpty()
+            }
+
+            onNodeWithTag(StaffListTestTags.NEW_STAFF_BUTTON).performClick()
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(CreateStaffTestTags.FULL_NAME_INPUT).fetchSemanticsNodes().isNotEmpty()
+            }
+
+            onNodeWithTag(CreateStaffTestTags.FULL_NAME_INPUT).performScrollTo().performTextInput("Carlos Mejía")
+            onNodeWithTag(CreateStaffTestTags.DOCUMENT_INPUT).performScrollTo().performTextInput("71829304")
+            onNodeWithTag(CreateStaffTestTags.EMAIL_INPUT).performScrollTo().performTextInput("carlos@itm.edu.co")
+            onNodeWithTag(CreateStaffTestTags.PHONE_INPUT).performScrollTo().performTextInput("3119876543")
+            onNodeWithTag(CreateStaffTestTags.PASSWORD_INPUT).performScrollTo().performTextInput("StaffClave2026")
+            onNodeWithTag(CreateStaffTestTags.ROLE_COORDINATOR_OPTION).performScrollTo().performClick()
+            onNodeWithTag(CreateStaffTestTags.SUBMIT_BUTTON).performScrollTo().performClick()
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(ConfirmDialogTestTags.DIALOG).fetchSemanticsNodes().isNotEmpty()
+            }
+
+            onNodeWithTag(ConfirmDialogTestTags.ACCEPT_BUTTON).performClick()
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(StaffListTestTags.LIST_CONTAINER).fetchSemanticsNodes().isNotEmpty()
+            }
+
+            assertEquals(1, staffRepo.createCalls.size)
+            assertEquals(UserRole.COORDINADOR, staffRepo.createCalls.first().role)
+            onNodeWithTag(StaffListTestTags.LIST_CONTAINER).assertIsDisplayed()
+        }
+
+    @Test
+    fun `AppNavHost restores Agent session directly to AgentHomeRoute`() =
+        runComposeUiTest {
+            val agent = AuthTestFixtures.userProfile(role = UserRole.PERSONAL_ATENCION)
+            startTestKoin(
+                initialToken = "valid-agent-jwt",
+                authRepository =
+                    FakeAuthRepository(
+                        getCurrentUserHandler = { AppResult.Success(agent) },
+                    ),
+            )
+
+            setContent {
+                ServiceDeskAppRoot()
+            }
+
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(HomeTestTags.AGENT_HOME).fetchSemanticsNodes().isNotEmpty()
+            }
+            onNodeWithTag(HomeTestTags.AGENT_HOME).assertIsDisplayed()
+        }
+}
