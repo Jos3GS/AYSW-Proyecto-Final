@@ -1,0 +1,59 @@
+# ==============================================================================
+# ITM Service Desk - Monorepo (.gitignore)
+# Cubre Backend (Kotlin / Ktor / Gradle) y Frontend (KMP / Android / WasmJs)
+# ==============================================================================
+
+# --- Gradle & Kotlin ---
+.gradle/
+.kotlin/
+**/build/
+!**/src/**/build/
+*.hprof
+*.class
+*.jar
+*.war
+*.ear
+!**/gradle/wrapper/gradle-wrapper.jar
+
+# --- Secretos, Variables de Entorno y Configuracion Local ---
+.env
+.env.*
+!.env.example
+local.properties
+*.jks
+*.keystore
+*.p12
+google-services.json
+
+# --- Android ---
+*.apk
+*.aab
+*.ap_
+*.dex
+captures/
+.cxx/
+.externalNativeBuild/
+
+# --- WasmJs / Web / Node ---
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# --- IntelliJ IDEA & Editores ---
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+.vscode/
+*.swp
+*.swo
+*~
+
+# --- Logs, Temporales y Sistema Operativo ---
+*.log
+hs_err_pid*
+replay_pid*
+.DS_Store
+Thumbs.db
+desktop.ini
