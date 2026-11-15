@@ -158,7 +158,7 @@ android {
 val isReleaseBuild = (findProperty("isRelease") as String?)?.toBoolean() ?: false
 val releaseApiUrl = (findProperty("releaseApiUrl") as String?) ?: "https://api.dominio-proyecto.com"
 val apiBaseUrlOverride = findProperty("apiBaseUrl") as String?
-val webDevApiUrl = apiBaseUrlOverride ?: (findProperty("webDevApiUrl") as String?) ?: "http://localhost:8080"
+val webDevApiUrl = apiBaseUrlOverride ?: (findProperty("webDevApiUrl") as String?) ?: "https://localhost:8443"
 val androidDevApiUrl = apiBaseUrlOverride ?: (findProperty("androidDevApiUrl") as String?) ?: "http://10.0.2.2:8080"
 
 buildkonfig {
