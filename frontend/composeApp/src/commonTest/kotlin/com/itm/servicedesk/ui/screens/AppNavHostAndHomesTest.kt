@@ -2,6 +2,7 @@ package com.itm.servicedesk.ui.screens
 
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -9,27 +10,44 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.v2.runComposeUiTest
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.rememberNavController
 import com.itm.servicedesk.core.storage.SessionEventBus
 import com.itm.servicedesk.core.storage.SessionStorage
+import com.itm.servicedesk.data.mapper.RequestUiMapper
 import com.itm.servicedesk.data.mapper.StaffUiMapper
 import com.itm.servicedesk.domain.model.AppResult
+import com.itm.servicedesk.domain.model.DomainError
+import com.itm.servicedesk.domain.model.RequestCategory
+import com.itm.servicedesk.domain.model.RequestStatus
 import com.itm.servicedesk.domain.model.ServiceHealth
 import com.itm.servicedesk.domain.model.UserRole
 import com.itm.servicedesk.domain.repository.AuthRepository
+import com.itm.servicedesk.domain.repository.ServiceRequestRepository
 import com.itm.servicedesk.domain.repository.StaffRepository
 import com.itm.servicedesk.domain.repository.SystemHealthRepository
 import com.itm.servicedesk.testing.AuthTestFixtures
 import com.itm.servicedesk.testing.FakeAuthRepository
+import com.itm.servicedesk.testing.FakeServiceRequestRepository
 import com.itm.servicedesk.testing.FakeStaffRepository
 import com.itm.servicedesk.testing.InMemoryTestSessionStorage
+import com.itm.servicedesk.testing.RequestTestFixtures
+import com.itm.servicedesk.ui.components.CancelDialogTestTags
 import com.itm.servicedesk.ui.components.ConfirmDialogTestTags
+import com.itm.servicedesk.ui.components.RequireRoleTestTags
 import com.itm.servicedesk.ui.components.TopBarTestTags
+import com.itm.servicedesk.ui.navigation.AppNavHost
+import com.itm.servicedesk.ui.navigation.CreateRequestRoute
+import com.itm.servicedesk.ui.navigation.RequestDetailRoute
 import com.itm.servicedesk.ui.navigation.ServiceDeskAppRoot
 import com.itm.servicedesk.ui.screens.auth.LoginTestTags
 import com.itm.servicedesk.ui.screens.auth.RegisterTestTags
 import com.itm.servicedesk.ui.screens.home.AgentHomeScreen
 import com.itm.servicedesk.ui.screens.home.CoordinatorHomeScreen
 import com.itm.servicedesk.ui.screens.home.HomeTestTags
+import com.itm.servicedesk.ui.screens.requests.CreateRequestTestTags
+import com.itm.servicedesk.ui.screens.requests.MyRequestsTestTags
+import com.itm.servicedesk.ui.screens.requests.RequestDetailTestTags
 import com.itm.servicedesk.ui.screens.staff.CreateStaffTestTags
 import com.itm.servicedesk.ui.screens.staff.StaffListTestTags
 import com.itm.servicedesk.ui.theme.ServiceDeskTheme
@@ -40,6 +58,9 @@ import com.itm.servicedesk.viewmodel.SessionViewModel
 import com.itm.servicedesk.viewmodel.StaffListViewModel
 import com.itm.servicedesk.viewmodel.StartupUiMapper
 import com.itm.servicedesk.viewmodel.StartupViewModel
+import com.itm.servicedesk.viewmodel.requests.CreateRequestViewModel
+import com.itm.servicedesk.viewmodel.requests.MyRequestsViewModel
+import com.itm.servicedesk.viewmodel.requests.RequestDetailViewModel
 import org.koin.core.context.startKoin
 import org.koin.core.context.stopKoin
 import org.koin.core.module.dsl.viewModel
@@ -72,6 +93,7 @@ class AppNavHostAndHomesTest : ComposeUiTestBase() {
         initialToken: String? = null,
         authRepository: AuthRepository = FakeAuthRepository(),
         staffRepository: StaffRepository = FakeStaffRepository(),
+        serviceRequestRepository: ServiceRequestRepository = FakeServiceRequestRepository(),
     ) {
         stopKoin()
         startKoin {
@@ -82,7 +104,9 @@ class AppNavHostAndHomesTest : ComposeUiTestBase() {
                     single<SystemHealthRepository> { NavFakeHealthRepository() }
                     single { authRepository }
                     single { staffRepository }
+                    single { serviceRequestRepository }
                     single { StaffUiMapper() }
+                    single { RequestUiMapper() }
                     factory { StartupUiMapper() }
                     viewModel { StartupViewModel(repository = get(), uiMapper = get()) }
                     viewModel {
@@ -96,6 +120,9 @@ class AppNavHostAndHomesTest : ComposeUiTestBase() {
                     viewModel { RegisterViewModel(authRepository = get()) }
                     viewModel { StaffListViewModel(staffRepository = get(), staffUiMapper = get()) }
                     viewModel { CreateStaffViewModel(staffRepository = get(), staffUiMapper = get()) }
+                    viewModel { MyRequestsViewModel(repository = get(), uiMapper = get()) }
+                    viewModel { CreateRequestViewModel(repository = get()) }
+                    viewModel { RequestDetailViewModel(repository = get(), uiMapper = get()) }
                 },
             )
         }
@@ -340,5 +367,206 @@ class AppNavHostAndHomesTest : ComposeUiTestBase() {
                 onAllNodesWithTag(HomeTestTags.AGENT_HOME).fetchSemanticsNodes().isNotEmpty()
             }
             onNodeWithTag(HomeTestTags.AGENT_HOME).assertIsDisplayed()
+        }
+
+    @Test
+    fun `AppNavHost executes Applicant create, detail, cancel dialog, and 409 conflict reload`() =
+        runComposeUiTest {
+            val applicant = AuthTestFixtures.userProfile(role = UserRole.SOLICITANTE)
+            var currentStatus = RequestStatus.ABIERTA
+            var cancelAttempts = 0
+            val requestRepo =
+                FakeServiceRequestRepository(
+                    getMyRequestsHandler = { page, size, _ ->
+                        AppResult.Success(
+                            RequestTestFixtures.requestsPage(
+                                items = listOf(RequestTestFixtures.requestSummary(code = "SOL-2026-00019")),
+                                page = page,
+                                size = size,
+                            ),
+                        )
+                    },
+                    createHandler = { command ->
+                        AppResult.Success(
+                            RequestTestFixtures.requestDetail(
+                                code = "SOL-2026-00020",
+                                category = command.category,
+                                subject = command.subject,
+                                description = command.description,
+                                status = RequestStatus.ABIERTA,
+                            ),
+                        )
+                    },
+                    getDetailHandler = { code ->
+                        AppResult.Success(
+                            RequestTestFixtures.requestDetail(
+                                code = code,
+                                status = currentStatus,
+                            ),
+                        )
+                    },
+                    cancelHandler = { command ->
+                        cancelAttempts += 1
+                        if (cancelAttempts == 1) {
+                            currentStatus = RequestStatus.EN_REVISION
+                            AppResult.Failure(
+                                DomainError.Conflict("La solicitud ya fue tomada para revisión."),
+                            )
+                        } else {
+                            currentStatus = RequestStatus.CANCELADA
+                            AppResult.Success(
+                                RequestTestFixtures.requestDetail(
+                                    code = command.code,
+                                    status = RequestStatus.CANCELADA,
+                                ),
+                            )
+                        }
+                    },
+                )
+            startTestKoin(
+                initialToken = "valid-applicant-jwt",
+                authRepository = FakeAuthRepository(getCurrentUserHandler = { AppResult.Success(applicant) }),
+                serviceRequestRepository = requestRepo,
+            )
+
+            setContent {
+                ServiceDeskAppRoot()
+            }
+
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(MyRequestsTestTags.NEW_BUTTON).fetchSemanticsNodes().isNotEmpty()
+            }
+            onNodeWithTag(MyRequestsTestTags.NEW_BUTTON).performClick()
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(CreateRequestTestTags.CATEGORY_DROPDOWN).fetchSemanticsNodes().isNotEmpty()
+            }
+
+            onNodeWithTag(CreateRequestTestTags.CATEGORY_DROPDOWN).performScrollTo().performClick()
+            onNodeWithTag(CreateRequestTestTags.categoryOption(RequestCategory.TRAMITE)).performClick()
+            onNodeWithTag(CreateRequestTestTags.SUBJECT_INPUT)
+                .performScrollTo()
+                .performTextInput("Certificado de estudios")
+            onNodeWithTag(CreateRequestTestTags.DESCRIPTION_INPUT)
+                .performScrollTo()
+                .performTextInput("Necesito el certificado oficial del periodo 2026-1 para beca.")
+            onNodeWithTag(CreateRequestTestTags.SUBMIT_BUTTON).performScrollTo().performClick()
+
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(RequestDetailTestTags.CODE).fetchSemanticsNodes().isNotEmpty()
+            }
+            onNodeWithText("SOL-2026-00020").assertIsDisplayed()
+            onNodeWithTag(RequestDetailTestTags.CANCEL_BUTTON).performScrollTo().performClick()
+
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(CancelDialogTestTags.DIALOG).fetchSemanticsNodes().isNotEmpty()
+            }
+            onNodeWithTag(CancelDialogTestTags.REASON_INPUT).performTextInput("Ya no lo requiero")
+            onNodeWithTag(CancelDialogTestTags.CONFIRM_BUTTON).performClick()
+
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(RequestDetailTestTags.ACTION_ERROR_BANNER).fetchSemanticsNodes().isNotEmpty()
+            }
+            onNodeWithText("La solicitud ya fue tomada para revisión.").assertIsDisplayed()
+            onNodeWithText("En revisión").assertIsDisplayed()
+        }
+
+    @Test
+    fun `AppNavHost pre-fills previousRequestCode from RESUELTA detail and enforces SOLICITANTE role`() =
+        runComposeUiTest {
+            val applicant = AuthTestFixtures.userProfile(role = UserRole.SOLICITANTE)
+            val resolvedRepo =
+                FakeServiceRequestRepository(
+                    getMyRequestsHandler = { page, size, _ ->
+                        AppResult.Success(
+                            RequestTestFixtures.requestsPage(
+                                items =
+                                    listOf(
+                                        RequestTestFixtures.requestSummary(
+                                            code = "SOL-2026-00015",
+                                            status = RequestStatus.RESUELTA,
+                                        ),
+                                    ),
+                                page = page,
+                                size = size,
+                            ),
+                        )
+                    },
+                    getDetailHandler = { code ->
+                        AppResult.Success(
+                            RequestTestFixtures.requestDetail(
+                                code = code,
+                                status = RequestStatus.RESUELTA,
+                                responseText = "Respuesta lista.",
+                                respondedAt = RequestTestFixtures.sampleRespondedAt,
+                            ),
+                        )
+                    },
+                )
+            startTestKoin(
+                initialToken = "valid-applicant-jwt",
+                authRepository = FakeAuthRepository(getCurrentUserHandler = { AppResult.Success(applicant) }),
+                serviceRequestRepository = resolvedRepo,
+            )
+
+            setContent {
+                ServiceDeskAppRoot()
+            }
+
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(MyRequestsTestTags.item("SOL-2026-00015")).fetchSemanticsNodes().isNotEmpty()
+            }
+            onNodeWithTag(MyRequestsTestTags.item("SOL-2026-00015")).performClick()
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(RequestDetailTestTags.CREATE_RELATED_BUTTON).fetchSemanticsNodes().isNotEmpty()
+            }
+
+            onNodeWithTag(RequestDetailTestTags.CREATE_RELATED_BUTTON).performScrollTo().performClick()
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(CreateRequestTestTags.PREVIOUS_CODE_INPUT).fetchSemanticsNodes().isNotEmpty()
+            }
+            onNodeWithTag(CreateRequestTestTags.PREVIOUS_CODE_INPUT)
+                .performScrollTo()
+                .assertIsDisplayed()
+                .assertTextContains("SOL-2026-00015")
+        }
+
+    @Test
+    fun `AppNavHost enforces RequireRole SOLICITANTE on CreateRequestRoute and RequestDetailRoute`() =
+        runComposeUiTest {
+            val coordinator = AuthTestFixtures.userProfile(role = UserRole.COORDINADOR)
+            startTestKoin(
+                initialToken = "valid-coord-jwt",
+                authRepository = FakeAuthRepository(getCurrentUserHandler = { AppResult.Success(coordinator) }),
+            )
+            lateinit var controller: NavHostController
+            setContent {
+                ServiceDeskTheme {
+                    controller = rememberNavController()
+                    AppNavHost(navController = controller)
+                }
+            }
+
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(HomeTestTags.COORDINATOR_HOME).fetchSemanticsNodes().isNotEmpty()
+            }
+            runOnIdle {
+                controller.navigate(CreateRequestRoute())
+            }
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(RequireRoleTestTags.FORBIDDEN_CARD).fetchSemanticsNodes().isNotEmpty()
+            }
+            onNodeWithTag(RequireRoleTestTags.FORBIDDEN_CARD).assertIsDisplayed()
+            onNodeWithTag(RequireRoleTestTags.GO_HOME_BUTTON).performClick()
+
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(HomeTestTags.COORDINATOR_HOME).fetchSemanticsNodes().isNotEmpty()
+            }
+            runOnIdle {
+                controller.navigate(RequestDetailRoute(code = "SOL-2026-00015"))
+            }
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(RequireRoleTestTags.FORBIDDEN_CARD).fetchSemanticsNodes().isNotEmpty()
+            }
+            onNodeWithTag(RequireRoleTestTags.FORBIDDEN_CARD).assertIsDisplayed()
         }
 }

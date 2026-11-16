@@ -17,6 +17,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.toRoute
 import com.itm.servicedesk.domain.model.UserRole
 import com.itm.servicedesk.ui.components.AuthenticatedTopBar
 import com.itm.servicedesk.ui.components.ConfirmationDialog
@@ -26,6 +27,8 @@ import com.itm.servicedesk.ui.screens.auth.RegisterScreen
 import com.itm.servicedesk.ui.screens.home.AgentHomeScreen
 import com.itm.servicedesk.ui.screens.home.ApplicantHomeScreen
 import com.itm.servicedesk.ui.screens.home.CoordinatorHomeScreen
+import com.itm.servicedesk.ui.screens.requests.CreateRequestScreen
+import com.itm.servicedesk.ui.screens.requests.RequestDetailScreen
 import com.itm.servicedesk.ui.screens.staff.CreateStaffScreen
 import com.itm.servicedesk.ui.screens.staff.StaffListScreen
 import com.itm.servicedesk.ui.theme.ServiceDeskTheme
@@ -39,6 +42,10 @@ import com.itm.servicedesk.viewmodel.SessionNavigationEvent
 import com.itm.servicedesk.viewmodel.SessionUiState
 import com.itm.servicedesk.viewmodel.SessionViewModel
 import com.itm.servicedesk.viewmodel.StaffListViewModel
+import com.itm.servicedesk.viewmodel.requests.CreateRequestEvent
+import com.itm.servicedesk.viewmodel.requests.CreateRequestViewModel
+import com.itm.servicedesk.viewmodel.requests.MyRequestsViewModel
+import com.itm.servicedesk.viewmodel.requests.RequestDetailViewModel
 import org.koin.compose.viewmodel.koinViewModel
 import com.itm.servicedesk.ui.screens.StartupRoute as StartupScreenRoute
 
@@ -186,10 +193,141 @@ fun AppNavHost(
                     onRequireLogin = { navigateToLoginRoot(navController) },
                 ) {
                     val user = (sessionState as SessionUiState.Authenticated).user
+                    val myRequestsViewModel: MyRequestsViewModel = koinViewModel()
+                    val myRequestsUiState by myRequestsViewModel.uiState.collectAsState()
+
+                    LaunchedEffect(Unit) {
+                        myRequestsViewModel.loadRequests()
+                    }
+
                     ApplicantHomeScreen(
                         user = user,
+                        uiState = myRequestsUiState,
+                        onSelectStatusFilter = myRequestsViewModel::selectStatusFilter,
+                        onPreviousPage = myRequestsViewModel::previousPage,
+                        onNextPage = myRequestsViewModel::nextPage,
+                        onRetry = myRequestsViewModel::refresh,
+                        onNavigateToCreate = {
+                            navController.navigate(CreateRequestRoute()) {
+                                launchSingleTop = true
+                            }
+                        },
+                        onOpenDetail = { code ->
+                            navController.navigate(RequestDetailRoute(code = code)) {
+                                launchSingleTop = true
+                            }
+                        },
                         onLogoutClick = sessionViewModel::requestLogout,
                     )
+                }
+            }
+
+            composable<CreateRequestRoute> { backStackEntry ->
+                RequireRole(
+                    sessionState = sessionState,
+                    allowedRoles = setOf(UserRole.SOLICITANTE),
+                    onGoHome = { role -> navigateToRoleHome(navController, role) },
+                    onRequireLogin = { navigateToLoginRoot(navController) },
+                ) {
+                    val user = (sessionState as SessionUiState.Authenticated).user
+                    val route = backStackEntry.toRoute<CreateRequestRoute>()
+                    val createViewModel: CreateRequestViewModel = koinViewModel()
+                    val createUiState by createViewModel.uiState.collectAsState()
+
+                    LaunchedEffect(route.previousRequestCode) {
+                        createViewModel.prefillPreviousRequestCode(route.previousRequestCode)
+                    }
+
+                    LaunchedEffect(createViewModel) {
+                        createViewModel.events.collect { event ->
+                            when (event) {
+                                is CreateRequestEvent.Created -> {
+                                    navController.navigate(RequestDetailRoute(code = event.detail.code)) {
+                                        popUpTo<CreateRequestRoute> { inclusive = true }
+                                        launchSingleTop = true
+                                    }
+                                    snackbarHostState.showSnackbar(
+                                        "Solicitud ${event.detail.code} radicada correctamente.",
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Scaffold(
+                        modifier = Modifier.fillMaxSize(),
+                        topBar = {
+                            AuthenticatedTopBar(
+                                title = "Nueva solicitud",
+                                userFullName = user.fullName,
+                                roleLabel = "Solicitante",
+                                onLogoutClick = sessionViewModel::requestLogout,
+                                onBackClick = { navController.popBackStack() },
+                            )
+                        },
+                    ) { innerPadding ->
+                        CreateRequestScreen(
+                            uiState = createUiState,
+                            onCategorySelected = createViewModel::onCategorySelected,
+                            onSubjectChange = createViewModel::onSubjectChange,
+                            onDescriptionChange = createViewModel::onDescriptionChange,
+                            onPreviousRequestCodeChange = createViewModel::onPreviousRequestCodeChange,
+                            onSubmit = createViewModel::submit,
+                            modifier = Modifier.padding(innerPadding),
+                        )
+                    }
+                }
+            }
+
+            composable<RequestDetailRoute> { backStackEntry ->
+                RequireRole(
+                    sessionState = sessionState,
+                    allowedRoles = setOf(UserRole.SOLICITANTE),
+                    onGoHome = { role -> navigateToRoleHome(navController, role) },
+                    onRequireLogin = { navigateToLoginRoot(navController) },
+                ) {
+                    val user = (sessionState as SessionUiState.Authenticated).user
+                    val route = backStackEntry.toRoute<RequestDetailRoute>()
+                    val detailViewModel: RequestDetailViewModel = koinViewModel()
+                    val detailUiState by detailViewModel.uiState.collectAsState()
+
+                    LaunchedEffect(route.code) {
+                        detailViewModel.loadDetail(route.code)
+                    }
+
+                    Scaffold(
+                        modifier = Modifier.fillMaxSize(),
+                        topBar = {
+                            AuthenticatedTopBar(
+                                title = "Detalle ${route.code}",
+                                userFullName = user.fullName,
+                                roleLabel = "Solicitante",
+                                onLogoutClick = sessionViewModel::requestLogout,
+                                onBackClick = { navController.popBackStack() },
+                            )
+                        },
+                    ) { innerPadding ->
+                        RequestDetailScreen(
+                            uiState = detailUiState,
+                            onOpenPreviousRequest = { previousCode ->
+                                navController.navigate(RequestDetailRoute(code = previousCode)) {
+                                    launchSingleTop = true
+                                }
+                            },
+                            onCreateRelatedRequest = { sourceCode ->
+                                navController.navigate(CreateRequestRoute(previousRequestCode = sourceCode)) {
+                                    launchSingleTop = true
+                                }
+                            },
+                            onOpenCancelDialog = detailViewModel::openCancelDialog,
+                            onCancelReasonChange = detailViewModel::onCancelReasonChange,
+                            onConfirmCancel = detailViewModel::confirmCancel,
+                            onDismissCancelDialog = detailViewModel::dismissCancelDialog,
+                            onRetry = { detailViewModel.loadDetail(route.code) },
+                            onBackToList = { navController.popBackStack() },
+                            modifier = Modifier.padding(innerPadding),
+                        )
+                    }
                 }
             }
 
