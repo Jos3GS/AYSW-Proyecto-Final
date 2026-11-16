@@ -35,3 +35,8 @@ data object StaffListRoute
 
 @Serializable
 data object CreateStaffRoute
+
+@Serializable
+data class AttentionDetailRoute(
+    val code: String,
+)

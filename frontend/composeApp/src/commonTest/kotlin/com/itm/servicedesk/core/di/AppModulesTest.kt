@@ -3,16 +3,21 @@ package com.itm.servicedesk.core.di
 import com.itm.servicedesk.core.storage.SessionEvent
 import com.itm.servicedesk.core.storage.SessionEventBus
 import com.itm.servicedesk.core.storage.SessionStorage
+import com.itm.servicedesk.domain.repository.AttentionRepository
 import com.itm.servicedesk.domain.repository.AuthRepository
 import com.itm.servicedesk.domain.repository.ServiceRequestRepository
 import com.itm.servicedesk.domain.repository.StaffRepository
 import com.itm.servicedesk.domain.repository.SystemHealthRepository
+import com.itm.servicedesk.domain.validation.AttentionFormValidator
 import com.itm.servicedesk.viewmodel.CreateStaffViewModel
 import com.itm.servicedesk.viewmodel.LoginViewModel
 import com.itm.servicedesk.viewmodel.RegisterViewModel
 import com.itm.servicedesk.viewmodel.SessionViewModel
 import com.itm.servicedesk.viewmodel.StaffListViewModel
 import com.itm.servicedesk.viewmodel.StartupViewModel
+import com.itm.servicedesk.viewmodel.attention.AgentInboxViewModel
+import com.itm.servicedesk.viewmodel.attention.AttentionDetailViewModel
+import com.itm.servicedesk.viewmodel.attention.CoordinationPendingViewModel
 import com.itm.servicedesk.viewmodel.requests.CreateRequestViewModel
 import com.itm.servicedesk.viewmodel.requests.MyRequestsViewModel
 import com.itm.servicedesk.viewmodel.requests.RequestDetailViewModel
@@ -122,6 +127,8 @@ class AppModulesTest {
             assertNotNull(koin.get<AuthRepository>())
             assertNotNull(koin.get<StaffRepository>())
             assertNotNull(koin.get<ServiceRequestRepository>())
+            assertNotNull(koin.get<AttentionRepository>())
+            assertNotNull(koin.get<AttentionFormValidator>())
             assertNotNull(koin.get<SessionViewModel>())
             assertNotNull(koin.get<LoginViewModel>())
             assertNotNull(koin.get<RegisterViewModel>())
@@ -130,6 +137,9 @@ class AppModulesTest {
             assertNotNull(koin.get<MyRequestsViewModel>())
             assertNotNull(koin.get<CreateRequestViewModel>())
             assertNotNull(koin.get<RequestDetailViewModel>())
+            assertNotNull(koin.get<CoordinationPendingViewModel>())
+            assertNotNull(koin.get<AgentInboxViewModel>())
+            assertNotNull(koin.get<AttentionDetailViewModel>())
             val viewModel = koin.get<StartupViewModel>()
             advanceUntilIdle()
             assertIs<com.itm.servicedesk.viewmodel.StartupUiState.Ready>(viewModel.uiState.value)

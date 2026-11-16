@@ -5,6 +5,8 @@ import com.itm.servicedesk.core.network.DefaultApiJson
 import com.itm.servicedesk.core.network.createHttpClient
 import com.itm.servicedesk.core.network.createPlatformHttpClientEngine
 import com.itm.servicedesk.core.storage.SessionEventBus
+import com.itm.servicedesk.data.mapper.AttentionMapper
+import com.itm.servicedesk.data.mapper.AttentionUiMapper
 import com.itm.servicedesk.data.mapper.AuthMapper
 import com.itm.servicedesk.data.mapper.ErrorMapper
 import com.itm.servicedesk.data.mapper.HealthMapper
@@ -12,7 +14,9 @@ import com.itm.servicedesk.data.mapper.RequestMapper
 import com.itm.servicedesk.data.mapper.RequestUiMapper
 import com.itm.servicedesk.data.mapper.StaffMapper
 import com.itm.servicedesk.data.mapper.StaffUiMapper
+import com.itm.servicedesk.data.remote.AttentionRemoteDataSource
 import com.itm.servicedesk.data.remote.AuthRemoteDataSource
+import com.itm.servicedesk.data.remote.KtorAttentionRemoteDataSource
 import com.itm.servicedesk.data.remote.KtorAuthRemoteDataSource
 import com.itm.servicedesk.data.remote.KtorRequestRemoteDataSource
 import com.itm.servicedesk.data.remote.KtorStaffRemoteDataSource
@@ -20,14 +24,17 @@ import com.itm.servicedesk.data.remote.KtorSystemHealthRemoteDataSource
 import com.itm.servicedesk.data.remote.RequestRemoteDataSource
 import com.itm.servicedesk.data.remote.StaffRemoteDataSource
 import com.itm.servicedesk.data.remote.SystemHealthRemoteDataSource
+import com.itm.servicedesk.data.repository.AttentionRepositoryImpl
 import com.itm.servicedesk.data.repository.AuthRepositoryImpl
 import com.itm.servicedesk.data.repository.ServiceRequestRepositoryImpl
 import com.itm.servicedesk.data.repository.StaffRepositoryImpl
 import com.itm.servicedesk.data.repository.SystemHealthRepositoryImpl
+import com.itm.servicedesk.domain.repository.AttentionRepository
 import com.itm.servicedesk.domain.repository.AuthRepository
 import com.itm.servicedesk.domain.repository.ServiceRequestRepository
 import com.itm.servicedesk.domain.repository.StaffRepository
 import com.itm.servicedesk.domain.repository.SystemHealthRepository
+import com.itm.servicedesk.domain.validation.AttentionFormValidator
 import com.itm.servicedesk.viewmodel.CreateStaffViewModel
 import com.itm.servicedesk.viewmodel.LoginViewModel
 import com.itm.servicedesk.viewmodel.RegisterViewModel
@@ -35,6 +42,9 @@ import com.itm.servicedesk.viewmodel.SessionViewModel
 import com.itm.servicedesk.viewmodel.StaffListViewModel
 import com.itm.servicedesk.viewmodel.StartupUiMapper
 import com.itm.servicedesk.viewmodel.StartupViewModel
+import com.itm.servicedesk.viewmodel.attention.AgentInboxViewModel
+import com.itm.servicedesk.viewmodel.attention.AttentionDetailViewModel
+import com.itm.servicedesk.viewmodel.attention.CoordinationPendingViewModel
 import com.itm.servicedesk.viewmodel.requests.CreateRequestViewModel
 import com.itm.servicedesk.viewmodel.requests.MyRequestsViewModel
 import com.itm.servicedesk.viewmodel.requests.RequestDetailViewModel
@@ -69,11 +79,15 @@ val repositoryModule: Module =
         single { StaffUiMapper() }
         single { RequestMapper() }
         single { RequestUiMapper() }
+        single { AttentionMapper() }
+        single { AttentionUiMapper() }
+        single { AttentionFormValidator() }
         single { ErrorMapper(json = get()) }
         single<SystemHealthRemoteDataSource> { KtorSystemHealthRemoteDataSource(httpClient = get()) }
         single<AuthRemoteDataSource> { KtorAuthRemoteDataSource(httpClient = get()) }
         single<StaffRemoteDataSource> { KtorStaffRemoteDataSource(httpClient = get()) }
         single<RequestRemoteDataSource> { KtorRequestRemoteDataSource(httpClient = get()) }
+        single<AttentionRemoteDataSource> { KtorAttentionRemoteDataSource(httpClient = get()) }
         single<SystemHealthRepository> {
             SystemHealthRepositoryImpl(
                 remoteDataSource = get(),
@@ -105,6 +119,13 @@ val repositoryModule: Module =
                 errorMapper = get(),
             )
         }
+        single<AttentionRepository> {
+            AttentionRepositoryImpl(
+                remoteDataSource = get(),
+                attentionMapper = get(),
+                errorMapper = get(),
+            )
+        }
     }
 
 val viewModelModule: Module =
@@ -125,6 +146,15 @@ val viewModelModule: Module =
         viewModel { MyRequestsViewModel(repository = get(), uiMapper = get()) }
         viewModel { CreateRequestViewModel(repository = get()) }
         viewModel { RequestDetailViewModel(repository = get(), uiMapper = get()) }
+        viewModel { CoordinationPendingViewModel(attentionRepository = get()) }
+        viewModel { AgentInboxViewModel(attentionRepository = get()) }
+        viewModel {
+            AttentionDetailViewModel(
+                attentionRepository = get(),
+                staffRepository = get(),
+                validator = get(),
+            )
+        }
     }
 
 val appModules: List<Module>
