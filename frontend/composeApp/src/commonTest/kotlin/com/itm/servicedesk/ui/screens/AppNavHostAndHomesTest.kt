@@ -3,17 +3,20 @@ package com.itm.servicedesk.ui.screens
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
 import com.itm.servicedesk.core.storage.SessionEventBus
 import com.itm.servicedesk.core.storage.SessionStorage
+import com.itm.servicedesk.data.mapper.ReportUiMapper
 import com.itm.servicedesk.data.mapper.RequestUiMapper
 import com.itm.servicedesk.data.mapper.StaffUiMapper
 import com.itm.servicedesk.domain.model.AppResult
@@ -25,14 +28,17 @@ import com.itm.servicedesk.domain.model.ServiceHealth
 import com.itm.servicedesk.domain.model.UserRole
 import com.itm.servicedesk.domain.repository.AttentionRepository
 import com.itm.servicedesk.domain.repository.AuthRepository
+import com.itm.servicedesk.domain.repository.ReportRepository
 import com.itm.servicedesk.domain.repository.ServiceRequestRepository
 import com.itm.servicedesk.domain.repository.StaffRepository
 import com.itm.servicedesk.domain.repository.SystemHealthRepository
 import com.itm.servicedesk.domain.validation.AttentionFormValidator
+import com.itm.servicedesk.domain.validation.ReportFilterValidator
 import com.itm.servicedesk.testing.AttentionTestFixtures
 import com.itm.servicedesk.testing.AuthTestFixtures
 import com.itm.servicedesk.testing.FakeAttentionRepository
 import com.itm.servicedesk.testing.FakeAuthRepository
+import com.itm.servicedesk.testing.FakeReportRepository
 import com.itm.servicedesk.testing.FakeServiceRequestRepository
 import com.itm.servicedesk.testing.FakeStaffRepository
 import com.itm.servicedesk.testing.InMemoryTestSessionStorage
@@ -40,10 +46,13 @@ import com.itm.servicedesk.testing.RequestTestFixtures
 import com.itm.servicedesk.ui.components.AttentionActionPanelTestTags
 import com.itm.servicedesk.ui.components.CancelDialogTestTags
 import com.itm.servicedesk.ui.components.ConfirmDialogTestTags
+import com.itm.servicedesk.ui.components.ReportFilterPanelTestTags
+import com.itm.servicedesk.ui.components.ReportSummarySectionTestTags
 import com.itm.servicedesk.ui.components.RequireRoleTestTags
 import com.itm.servicedesk.ui.components.TopBarTestTags
 import com.itm.servicedesk.ui.navigation.AppNavHost
 import com.itm.servicedesk.ui.navigation.AttentionDetailRoute
+import com.itm.servicedesk.ui.navigation.CoordinationReportsRoute
 import com.itm.servicedesk.ui.navigation.CreateRequestRoute
 import com.itm.servicedesk.ui.navigation.RequestDetailRoute
 import com.itm.servicedesk.ui.navigation.ServiceDeskAppRoot
@@ -55,6 +64,7 @@ import com.itm.servicedesk.ui.screens.auth.RegisterTestTags
 import com.itm.servicedesk.ui.screens.home.AgentHomeScreen
 import com.itm.servicedesk.ui.screens.home.CoordinatorHomeScreen
 import com.itm.servicedesk.ui.screens.home.HomeTestTags
+import com.itm.servicedesk.ui.screens.reports.CoordinationReportsTestTags
 import com.itm.servicedesk.ui.screens.requests.CreateRequestTestTags
 import com.itm.servicedesk.ui.screens.requests.MyRequestsTestTags
 import com.itm.servicedesk.ui.screens.requests.RequestDetailTestTags
@@ -73,6 +83,7 @@ import com.itm.servicedesk.viewmodel.attention.AgentInboxViewModel
 import com.itm.servicedesk.viewmodel.attention.AttentionDetailViewModel
 import com.itm.servicedesk.viewmodel.attention.CoordinationPendingUiState
 import com.itm.servicedesk.viewmodel.attention.CoordinationPendingViewModel
+import com.itm.servicedesk.viewmodel.reports.CoordinationReportsViewModel
 import com.itm.servicedesk.viewmodel.requests.CreateRequestViewModel
 import com.itm.servicedesk.viewmodel.requests.MyRequestsViewModel
 import com.itm.servicedesk.viewmodel.requests.RequestDetailViewModel
@@ -110,6 +121,7 @@ class AppNavHostAndHomesTest : ComposeUiTestBase() {
         staffRepository: StaffRepository = FakeStaffRepository(),
         serviceRequestRepository: ServiceRequestRepository = FakeServiceRequestRepository(),
         attentionRepository: AttentionRepository = FakeAttentionRepository(),
+        reportRepository: ReportRepository = FakeReportRepository(),
     ) {
         stopKoin()
         startKoin {
@@ -122,9 +134,12 @@ class AppNavHostAndHomesTest : ComposeUiTestBase() {
                     single { staffRepository }
                     single { serviceRequestRepository }
                     single { attentionRepository }
+                    single { reportRepository }
                     single { StaffUiMapper() }
                     single { RequestUiMapper() }
                     single { AttentionFormValidator() }
+                    single { ReportUiMapper() }
+                    single { ReportFilterValidator() }
                     factory { StartupUiMapper() }
                     viewModel { StartupViewModel(repository = get(), uiMapper = get()) }
                     viewModel {
@@ -148,6 +163,14 @@ class AppNavHostAndHomesTest : ComposeUiTestBase() {
                             attentionRepository = get(),
                             staffRepository = get(),
                             validator = get(),
+                        )
+                    }
+                    viewModel {
+                        CoordinationReportsViewModel(
+                            reportRepository = get(),
+                            staffRepository = get(),
+                            validator = get(),
+                            uiMapper = get(),
                         )
                     }
                 },
@@ -759,5 +782,118 @@ class AppNavHostAndHomesTest : ComposeUiTestBase() {
             }
             assertEquals(0, staffRepo.listCalls.size)
             assertEquals(1, attentionRepo.interventionCalls.size)
+        }
+
+    @Test
+    fun `AppNavHost navigates Coordinator to Reports, applies filter, and opens Detail`() =
+        runComposeUiTest {
+            val coordinator = AuthTestFixtures.userProfile(role = UserRole.COORDINADOR)
+            val reportRepo = FakeReportRepository()
+            startTestKoin(
+                initialToken = "valid-coord-jwt",
+                authRepository = FakeAuthRepository(getCurrentUserHandler = { AppResult.Success(coordinator) }),
+                reportRepository = reportRepo,
+            )
+
+            setContent {
+                ServiceDeskAppRoot()
+            }
+
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(HomeTestTags.REPORTS_BUTTON).fetchSemanticsNodes().isNotEmpty()
+            }
+            onNodeWithTag(HomeTestTags.REPORTS_BUTTON).performClick()
+
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(ReportFilterPanelTestTags.PANEL).fetchSemanticsNodes().isNotEmpty() &&
+                    reportRepo.summaryCalls.isNotEmpty()
+            }
+
+            onNodeWithTag(ReportFilterPanelTestTags.FROM_DATE_INPUT).performScrollTo().performTextInput("01/11/2026")
+            onNodeWithTag(ReportFilterPanelTestTags.TO_DATE_INPUT).performScrollTo().performTextInput("14/11/2026")
+            onNodeWithTag(ReportFilterPanelTestTags.APPLY_BUTTON).performScrollTo().performClick()
+
+            waitUntil(timeoutMillis = 5_000L) {
+                reportRepo.summaryCalls.size >= 2 && reportRepo.requestsCalls.size >= 2
+            }
+            assertEquals("2026-11-01", reportRepo.summaryCalls.last().createdFromIso)
+            assertEquals("2026-11-14", reportRepo.summaryCalls.last().createdToIso)
+
+            onNodeWithTag(CoordinationReportsTestTags.LIST_CONTAINER)
+                .performScrollToNode(hasTestTag(ReportSummarySectionTestTags.SECTION))
+            onNodeWithTag(ReportSummarySectionTestTags.SECTION).assertIsDisplayed()
+
+            onNodeWithTag(CoordinationReportsTestTags.LIST_CONTAINER)
+                .performScrollToNode(hasTestTag(CoordinationReportsTestTags.item("SOL-2026-00019")))
+            onNodeWithTag(CoordinationReportsTestTags.item("SOL-2026-00019")).performClick()
+
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(AttentionDetailTestTags.CODE).fetchSemanticsNodes().isNotEmpty()
+            }
+            onNodeWithTag(AttentionDetailTestTags.CODE).assertIsDisplayed()
+        }
+
+    @Test
+    fun `AppNavHost enforces RequireRole COORDINADOR on CoordinationReportsRoute for Agent and Applicant`() =
+        runComposeUiTest {
+            val agent = AuthTestFixtures.userProfile(role = UserRole.PERSONAL_ATENCION)
+            val agentReportRepo = FakeReportRepository()
+            startTestKoin(
+                initialToken = "valid-agent-jwt",
+                authRepository = FakeAuthRepository(getCurrentUserHandler = { AppResult.Success(agent) }),
+                reportRepository = agentReportRepo,
+            )
+            lateinit var controller: NavHostController
+            setContent {
+                ServiceDeskTheme {
+                    controller = rememberNavController()
+                    AppNavHost(navController = controller)
+                }
+            }
+
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(HomeTestTags.AGENT_HOME).fetchSemanticsNodes().isNotEmpty()
+            }
+            runOnIdle {
+                controller.navigate(CoordinationReportsRoute)
+            }
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(RequireRoleTestTags.FORBIDDEN_CARD).fetchSemanticsNodes().isNotEmpty()
+            }
+            onNodeWithTag(RequireRoleTestTags.FORBIDDEN_CARD).assertIsDisplayed()
+            assertEquals(0, agentReportRepo.summaryCalls.size)
+            assertEquals(0, agentReportRepo.requestsCalls.size)
+        }
+
+    @Test
+    fun `AppNavHost enforces RequireRole COORDINADOR on CoordinationReportsRoute for Applicant`() =
+        runComposeUiTest {
+            val applicant = AuthTestFixtures.userProfile(role = UserRole.SOLICITANTE)
+            val applicantReportRepo = FakeReportRepository()
+            startTestKoin(
+                initialToken = "valid-applicant-jwt",
+                authRepository = FakeAuthRepository(getCurrentUserHandler = { AppResult.Success(applicant) }),
+                reportRepository = applicantReportRepo,
+            )
+            lateinit var controller: NavHostController
+            setContent {
+                ServiceDeskTheme {
+                    controller = rememberNavController()
+                    AppNavHost(navController = controller)
+                }
+            }
+
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(HomeTestTags.APPLICANT_HOME).fetchSemanticsNodes().isNotEmpty()
+            }
+            runOnIdle {
+                controller.navigate(CoordinationReportsRoute)
+            }
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(RequireRoleTestTags.FORBIDDEN_CARD).fetchSemanticsNodes().isNotEmpty()
+            }
+            onNodeWithTag(RequireRoleTestTags.FORBIDDEN_CARD).assertIsDisplayed()
+            assertEquals(0, applicantReportRepo.summaryCalls.size)
+            assertEquals(0, applicantReportRepo.requestsCalls.size)
         }
 }

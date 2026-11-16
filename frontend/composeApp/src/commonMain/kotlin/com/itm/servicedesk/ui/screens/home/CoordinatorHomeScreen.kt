@@ -23,6 +23,7 @@ fun CoordinatorHomeScreen(
     onOpenDetail: (String) -> Unit,
     onManageStaffClick: () -> Unit,
     onLogoutClick: () -> Unit,
+    onOpenReportsClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
@@ -44,6 +45,7 @@ fun CoordinatorHomeScreen(
             onRetry = onRetry,
             onOpenDetail = onOpenDetail,
             onManageStaffClick = onManageStaffClick,
+            onOpenReportsClick = onOpenReportsClick,
             modifier = Modifier.padding(innerPadding),
         )
     }
