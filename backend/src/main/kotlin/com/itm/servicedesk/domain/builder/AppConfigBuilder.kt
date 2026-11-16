@@ -10,6 +10,7 @@ data class ServerConfig(
     val timezone: String,
     val corsAllowedOrigins: List<String>,
     val allowedClientIps: List<String>,
+    val autoCloseIntervalSeconds: Long = 60L,
 )
 
 data class DatabaseConfig(
@@ -61,6 +62,7 @@ class AppConfigBuilder {
     private var timezone: String = "America/Bogota"
     private var corsAllowedOrigins: List<String> = listOf("http://localhost:8081")
     private var allowedClientIps: List<String> = listOf("127.0.0.1", "::1")
+    private var autoCloseIntervalSeconds: Long = 60L
 
     private var jdbcUrl: String = ""
     private var dbUser: String = ""
@@ -85,12 +87,19 @@ class AppConfigBuilder {
         timezone: String,
         corsAllowedOrigins: List<String>,
         allowedClientIps: List<String>,
+        autoCloseIntervalSeconds: Long = 60L,
     ): AppConfigBuilder =
         apply {
             this.port = port
             this.timezone = timezone.trim()
             this.corsAllowedOrigins = corsAllowedOrigins.map { it.trim() }.filter { it.isNotEmpty() }
             this.allowedClientIps = allowedClientIps.map { it.trim() }.filter { it.isNotEmpty() }
+            this.autoCloseIntervalSeconds = autoCloseIntervalSeconds
+        }
+
+    fun autoCloseIntervalSeconds(seconds: Long): AppConfigBuilder =
+        apply {
+            this.autoCloseIntervalSeconds = seconds
         }
 
     fun database(
@@ -160,6 +169,7 @@ class AppConfigBuilder {
                     timezone = timezone,
                     corsAllowedOrigins = corsAllowedOrigins,
                     allowedClientIps = allowedClientIps,
+                    autoCloseIntervalSeconds = autoCloseIntervalSeconds,
                 ),
             database =
                 DatabaseConfig(
@@ -217,6 +227,14 @@ class AppConfigBuilder {
                 ValidationDetail(
                     "ALLOWED_CLIENT_IPS",
                     "Debe configurar al menos una IP o rango CIDR permitido.",
+                ),
+            )
+        }
+        if (autoCloseIntervalSeconds <= 0L) {
+            details.add(
+                ValidationDetail(
+                    "AUTO_CLOSE_INTERVAL_SECONDS",
+                    "AUTO_CLOSE_INTERVAL_SECONDS debe ser mayor a 0.",
                 ),
             )
         }

@@ -54,6 +54,9 @@ object EnvConfig {
                 ?.let(::parseCsv)
                 ?.ifEmpty { DEFAULT_ALLOWED_IPS }
                 ?: DEFAULT_ALLOWED_IPS
+        val autoCloseIntervalSeconds =
+            env["AUTO_CLOSE_INTERVAL_SECONDS"]?.let { it.toLongOrNull() ?: -1L }
+                ?: DEFAULT_AUTO_CLOSE_INTERVAL_SECONDS
 
         val dbUrl = env["DB_URL"] ?: ""
         val dbUser = env["DB_USER"] ?: ""
@@ -82,6 +85,7 @@ object EnvConfig {
                 timezone = timezone,
                 corsAllowedOrigins = corsAllowedOrigins,
                 allowedClientIps = allowedClientIps,
+                autoCloseIntervalSeconds = autoCloseIntervalSeconds,
             ).database(
                 jdbcUrl = dbUrl,
                 user = dbUser,
@@ -121,6 +125,7 @@ object EnvConfig {
 
     private const val DEFAULT_PORT = 8080
     private const val DEFAULT_TIMEZONE = "America/Bogota"
+    private const val DEFAULT_AUTO_CLOSE_INTERVAL_SECONDS = 60L
     private const val DEFAULT_MAX_POOL_SIZE = 10
     private const val DEFAULT_JWT_ISSUER = "itm-service-desk"
     private const val DEFAULT_JWT_AUDIENCE = "itm-service-desk-clients"

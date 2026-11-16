@@ -119,4 +119,25 @@ class AppConfigBuilderTest {
             ),
         )
     }
+
+    @Test
+    fun `build accepts default or positive autoCloseIntervalSeconds and rejects non-positive`() {
+        val defaultConfig = validBuilder().build()
+        assertEquals(60L, defaultConfig.server.autoCloseIntervalSeconds)
+
+        val customConfig = validBuilder().autoCloseIntervalSeconds(120L).build()
+        assertEquals(120L, customConfig.server.autoCloseIntervalSeconds)
+
+        val zeroEx =
+            assertFailsWith<DomainException.ValidationException> {
+                validBuilder().autoCloseIntervalSeconds(0L).build()
+            }
+        assertTrue(zeroEx.details.any { it.field == "AUTO_CLOSE_INTERVAL_SECONDS" })
+
+        val negativeEx =
+            assertFailsWith<DomainException.ValidationException> {
+                validBuilder().autoCloseIntervalSeconds(-5L).build()
+            }
+        assertTrue(negativeEx.details.any { it.field == "AUTO_CLOSE_INTERVAL_SECONDS" })
+    }
 }

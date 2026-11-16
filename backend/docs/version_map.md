@@ -1,6 +1,6 @@
 # ITM Service Desk (Backend) - Mapa de Versiones y Ciclo de Vida
 **Ubicación:** `docs/version_map.md`  
-**Versión Actual en Desarrollo:** `v0.2.0-alpha`  
+**Versión Actual:** `v0.2.0` (`003-service-requests` y `004-attention-lifecycle` completados)  
 **Última Actualización:** 2026-11-15  
 
 ---
@@ -27,7 +27,7 @@ flowchart LR
 | Versión | Nombre del Hito | Objetivo Principal | Specs / Épicas Incluidas | Trazabilidad HU / RF / RNF | Estado |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **`v0.1.0`** | Foundation, Auth & Personal | Arquitectura en capas, Ktor Netty, HikariCP + Flyway (usuario semilla Coordinador), registro público de solicitantes, login JWT (1h) con BCrypt, RBAC y gestión de personal interno | `001-project-setup`, `002-auth-users` | **HU-01** (registro), **HU-07**; **RF-01**, **RF-07**; **RNF-01 a RNF-04**, **RNF-06**, **RNF-08** | 🟢 Completado |
-| **`v0.2.0`** | Core Service Desk & Trazabilidad | Registro de solicitudes (`SOL-AAAA-NNNNN`, Builder), consulta/cancelación, bandeja y asignación/priorización (SLA 24h/72h/120h), máquina de estados (Patrón State), intervenciones, escalamiento, respuesta final, historial inmutable y cierre automático (24h) | `003-service-requests` (Completado), `004-attention-lifecycle` (Pendiente) | **HU-01** (solicitud), **HU-02**, **HU-03**, **HU-04**, **HU-05**; **RF-02 a RF-05**; **RNF-05 a RNF-09** | 🟡 En progreso (`003` completado) |
+| **`v0.2.0`** | Core Service Desk & Trazabilidad | Registro de solicitudes (`SOL-AAAA-NNNNN`, Builder), consulta/cancelación, bandeja y asignación/priorización (SLA 24h/72h/120h), máquina de estados (Patrón State), intervenciones, escalamiento, respuesta final, historial inmutable y cierre automático (24h) | `003-service-requests` (Completado), `004-attention-lifecycle` (Completado) | **HU-01** (solicitud), **HU-02**, **HU-03**, **HU-04**, **HU-05**; **RF-02 a RF-05**; **RNF-05 a RNF-09** | 🟢 Completado |
 | **`v0.3.0`** | Coordinación & Reportes Consolidados | Resumen consolidado para Coordinación (totales por estado, categoría, prioridad, responsable, vencidas y dentro/fuera de plazo), filtros combinados (Builder) y listado general paginado | `005-coordination-reports` | **HU-06**; **RF-06**; **RNF-03**, **RNF-07** | ⚪ Planificado |
 | **`v1.0.0`** | Release v1.0 & Quality Gate | Cumplimiento integral RNF-01 a RNF-10 (rendimiento `< 2s` con 1000 solicitudes, paginación 20/pág, zona horaria `America/Bogota`, `.env.example`, README local), cobertura $\ge 90\%$ con Testcontainers PostgreSQL, `ktlint 1.8.x` y auditoría `converge.md` | `006-hardening-release` | **RNF-01 a RNF-10** (auditoría completa de alcance y calidad) | ⚪ Planificado |
 
@@ -64,6 +64,14 @@ flowchart LR
 ---
 
 ## 5. Changelog / Registro Histórico
+
+### [v0.2.0] - 2026-11-15
+#### Added
+- Implementación completa y verificada de **`004-attention-lifecycle`**:
+  - Migración Flyway `V4__add_autoclose_partial_index.sql` (`idx_sr_autoclose ON service_requests (responded_at ASC, id ASC) WHERE status = 'RESUELTA'`) y configuración tipada `AUTO_CLOSE_INTERVAL_SECONDS=60` (`> 0`) en `.env.example`, `EnvConfig` y `AppConfigBuilder`.
+  - Reloj inyectable `TimeProvider` / `BogotaTimeProvider` (`America/Bogota`, `-05:00`), `RequestPriority.slaHours` (`ALTA=24h`, `MEDIA=72h`, `BAJA=120h`), `ServiceRequest.isOverdue(now)` informativo no bloqueante, **Patrón GoF State** completo en `ServiceRequestState` (`assign`, `addIntervention`, `escalate`, `reassign` preservando `firstAssignedAt` inmutable, `respond`, `autoClose`), `AttentionQueryBuilder` (`page >= 1`, `size in 1..20`) y `AttentionValidator` (`10..1000`, `10..500`, `20..2000`).
+  - `ExposedAttentionRepository` con alias de `UsersTable` sin N+1, actualización condicional atómica `UPDATE ... WHERE id = ? AND status = ?` + `INSERT INTO request_history` (`409 Conflict` ante concurrencia), y cierre automático por lotes mediante `FOR UPDATE SKIP LOCKED`.
+  - `AttentionService`, `AutoCloseService`, `AutoCloseScheduler` (corutinas nativas en Ktor `ApplicationStarted` / `ApplicationStopping`), DTOs `@Serializable` estrictos (`ignoreUnknownKeys = false`) y `AttentionRouting` con los 8 endpoints `/api/v1/attention/*` validados con `ktlintCheck`, Testcontainers PostgreSQL 18 y Kover ($\ge 90\%$).
 
 ### [v0.2.0-alpha] - 2026-11-15
 #### Added
