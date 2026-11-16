@@ -11,14 +11,17 @@ import androidx.compose.ui.test.v2.runComposeUiTest
 import com.itm.servicedesk.core.storage.SessionEvent
 import com.itm.servicedesk.core.storage.SessionEventBus
 import com.itm.servicedesk.core.storage.SessionStorage
+import com.itm.servicedesk.data.mapper.RequestUiMapper
 import com.itm.servicedesk.data.mapper.StaffUiMapper
 import com.itm.servicedesk.domain.model.AppResult
 import com.itm.servicedesk.domain.model.DomainError
 import com.itm.servicedesk.domain.model.ServiceHealth
 import com.itm.servicedesk.domain.repository.AuthRepository
+import com.itm.servicedesk.domain.repository.ServiceRequestRepository
 import com.itm.servicedesk.domain.repository.StaffRepository
 import com.itm.servicedesk.domain.repository.SystemHealthRepository
 import com.itm.servicedesk.testing.FakeAuthRepository
+import com.itm.servicedesk.testing.FakeServiceRequestRepository
 import com.itm.servicedesk.testing.FakeStaffRepository
 import com.itm.servicedesk.testing.InMemoryTestSessionStorage
 import com.itm.servicedesk.ui.navigation.ServiceDeskAppRoot
@@ -33,6 +36,9 @@ import com.itm.servicedesk.viewmodel.StaffListViewModel
 import com.itm.servicedesk.viewmodel.StartupUiMapper
 import com.itm.servicedesk.viewmodel.StartupUiState
 import com.itm.servicedesk.viewmodel.StartupViewModel
+import com.itm.servicedesk.viewmodel.requests.CreateRequestViewModel
+import com.itm.servicedesk.viewmodel.requests.MyRequestsViewModel
+import com.itm.servicedesk.viewmodel.requests.RequestDetailViewModel
 import org.koin.core.context.startKoin
 import org.koin.core.context.stopKoin
 import org.koin.core.module.dsl.viewModel
@@ -168,7 +174,9 @@ class StartupScreenTest : ComposeUiTestBase() {
                         }
                         single<AuthRepository> { FakeAuthRepository() }
                         single<StaffRepository> { FakeStaffRepository() }
+                        single<ServiceRequestRepository> { FakeServiceRequestRepository() }
                         single { StaffUiMapper() }
+                        single { RequestUiMapper() }
                         factory { StartupUiMapper() }
                         viewModel { StartupViewModel(repository = get(), uiMapper = get()) }
                         viewModel {
@@ -182,6 +190,9 @@ class StartupScreenTest : ComposeUiTestBase() {
                         viewModel { RegisterViewModel(authRepository = get()) }
                         viewModel { StaffListViewModel(staffRepository = get(), staffUiMapper = get()) }
                         viewModel { CreateStaffViewModel(staffRepository = get(), staffUiMapper = get()) }
+                        viewModel { MyRequestsViewModel(repository = get(), uiMapper = get()) }
+                        viewModel { CreateRequestViewModel(repository = get()) }
+                        viewModel { RequestDetailViewModel(repository = get(), uiMapper = get()) }
                     },
                 )
             }

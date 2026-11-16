@@ -15,6 +15,16 @@ data object RegisterRoute
 data object ApplicantHomeRoute
 
 @Serializable
+data class CreateRequestRoute(
+    val previousRequestCode: String? = null,
+)
+
+@Serializable
+data class RequestDetailRoute(
+    val code: String,
+)
+
+@Serializable
 data object AgentHomeRoute
 
 @Serializable

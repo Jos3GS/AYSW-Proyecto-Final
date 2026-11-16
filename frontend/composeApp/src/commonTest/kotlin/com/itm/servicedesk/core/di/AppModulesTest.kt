@@ -4,6 +4,7 @@ import com.itm.servicedesk.core.storage.SessionEvent
 import com.itm.servicedesk.core.storage.SessionEventBus
 import com.itm.servicedesk.core.storage.SessionStorage
 import com.itm.servicedesk.domain.repository.AuthRepository
+import com.itm.servicedesk.domain.repository.ServiceRequestRepository
 import com.itm.servicedesk.domain.repository.StaffRepository
 import com.itm.servicedesk.domain.repository.SystemHealthRepository
 import com.itm.servicedesk.viewmodel.CreateStaffViewModel
@@ -12,6 +13,9 @@ import com.itm.servicedesk.viewmodel.RegisterViewModel
 import com.itm.servicedesk.viewmodel.SessionViewModel
 import com.itm.servicedesk.viewmodel.StaffListViewModel
 import com.itm.servicedesk.viewmodel.StartupViewModel
+import com.itm.servicedesk.viewmodel.requests.CreateRequestViewModel
+import com.itm.servicedesk.viewmodel.requests.MyRequestsViewModel
+import com.itm.servicedesk.viewmodel.requests.RequestDetailViewModel
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.mock.MockEngine
@@ -117,11 +121,15 @@ class AppModulesTest {
             assertNotNull(koin.get<SystemHealthRepository>())
             assertNotNull(koin.get<AuthRepository>())
             assertNotNull(koin.get<StaffRepository>())
+            assertNotNull(koin.get<ServiceRequestRepository>())
             assertNotNull(koin.get<SessionViewModel>())
             assertNotNull(koin.get<LoginViewModel>())
             assertNotNull(koin.get<RegisterViewModel>())
             assertNotNull(koin.get<StaffListViewModel>())
             assertNotNull(koin.get<CreateStaffViewModel>())
+            assertNotNull(koin.get<MyRequestsViewModel>())
+            assertNotNull(koin.get<CreateRequestViewModel>())
+            assertNotNull(koin.get<RequestDetailViewModel>())
             val viewModel = koin.get<StartupViewModel>()
             advanceUntilIdle()
             assertIs<com.itm.servicedesk.viewmodel.StartupUiState.Ready>(viewModel.uiState.value)

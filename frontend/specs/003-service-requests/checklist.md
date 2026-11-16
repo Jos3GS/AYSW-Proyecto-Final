@@ -1,7 +1,7 @@
 # Checklist de Calidad y Puertas de Aprobación (Quality Gates): 003-service-requests (Frontend)
 **Ubicación:** `specs/003-service-requests/checklist.md`  
 **Spec Asociada:** `specs/003-service-requests/spec.md`  
-**Estado:** Aprobado  
+**Estado:** Completado  
 
 ---
 
@@ -24,6 +24,6 @@
 - [x] No quedan puntos pendientes marcados con `[NECESITA ACLARACIÓN]`.
 
 ## 3. Preparación para Implementación (`tasks.md`)
-- [ ] El desglose secuencial en `specs/003-service-requests/tasks.md` está redactado y aprobado en orden TDD.
-- [ ] Cada tarea de `tasks.md` define su criterio de verificación automatizada (`ktlintCheck`, `Ktor MockEngine`, `kotlinx-coroutines-test`, `Compose UI Test`, `koverVerify`).
-- [ ] Aprobación explícita final para iniciar la implementación de `003-service-requests` (Frontend) *(una vez completada la planificación del resto de épicas o autorizada la fase de código)*.
+- [x] El desglose secuencial en `specs/003-service-requests/tasks.md` está redactado y aprobado en orden TDD.
+- [x] Cada tarea de `tasks.md` define su criterio de verificación automatizada (`ktlintCheck`, `Ktor MockEngine`, `kotlinx-coroutines-test`, `Compose UI Test`, `koverVerify`).
+- [x] Aprobación explícita final e implementación completada de `003-service-requests` (`T01..T07`, Frontend `SOLICITANTE`).
