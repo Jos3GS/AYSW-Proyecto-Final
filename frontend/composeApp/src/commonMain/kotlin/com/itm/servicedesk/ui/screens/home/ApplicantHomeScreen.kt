@@ -17,6 +17,7 @@ object HomeTestTags {
     const val AGENT_HOME = "agent_home_screen"
     const val COORDINATOR_HOME = "coordinator_home_screen"
     const val MANAGE_STAFF_BUTTON = "coordinator_manage_staff_button"
+    const val REPORTS_BUTTON = "coordinator_reports_button"
 }
 
 @Composable

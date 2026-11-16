@@ -35,6 +35,7 @@ class CoordinationPendingScreenTest : ComposeUiTestBase() {
             var openedCode: String? = null
             var nextClicks = 0
             var manageStaffClicks = 0
+            var openReportsClicks = 0
             val overdueEscalated =
                 AttentionTestFixtures.requestSummary(
                     code = "SOL-2026-00019",
@@ -61,6 +62,7 @@ class CoordinationPendingScreenTest : ComposeUiTestBase() {
                         onRetry = {},
                         onOpenDetail = { openedCode = it },
                         onManageStaffClick = { manageStaffClicks += 1 },
+                        onOpenReportsClick = { openReportsClicks += 1 },
                     )
                 }
             }
@@ -88,6 +90,9 @@ class CoordinationPendingScreenTest : ComposeUiTestBase() {
 
             onNodeWithTag(CoordinationPendingTestTags.NEXT_PAGE_BUTTON).performClick()
             assertEquals(1, nextClicks)
+
+            onNodeWithTag(HomeTestTags.REPORTS_BUTTON).performClick()
+            assertEquals(1, openReportsClicks)
 
             onNodeWithTag(HomeTestTags.MANAGE_STAFF_BUTTON).performClick()
             assertEquals(1, manageStaffClicks)

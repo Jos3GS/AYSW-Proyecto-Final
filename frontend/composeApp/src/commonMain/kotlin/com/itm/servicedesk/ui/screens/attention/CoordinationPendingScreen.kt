@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -56,6 +58,7 @@ object CoordinationPendingTestTags {
     fun item(code: String): String = "coordination_pending_item_$code"
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CoordinationPendingScreen(
     uiState: CoordinationPendingUiState,
@@ -65,6 +68,7 @@ fun CoordinationPendingScreen(
     onRetry: () -> Unit,
     onOpenDetail: (String) -> Unit,
     onManageStaffClick: (() -> Unit)? = null,
+    onOpenReportsClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val uiMapper = remember { AttentionUiMapper() }
@@ -81,12 +85,12 @@ fun CoordinationPendingScreen(
                     .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Row(
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Column(modifier = Modifier.widthIn(min = 240.dp)) {
                     Text(
                         text = "Pendientes de coordinación",
                         style = MaterialTheme.typography.headlineSmall,
@@ -98,12 +102,27 @@ fun CoordinationPendingScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                if (onManageStaffClick != null) {
-                    Button(
-                        onClick = onManageStaffClick,
-                        modifier = Modifier.testTag(HomeTestTags.MANAGE_STAFF_BUTTON),
+                if (onOpenReportsClick != null || onManageStaffClick != null) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Text(text = "Personal interno")
+                        if (onOpenReportsClick != null) {
+                            OutlinedButton(
+                                onClick = onOpenReportsClick,
+                                modifier = Modifier.testTag(HomeTestTags.REPORTS_BUTTON),
+                            ) {
+                                Text(text = "Reportes y consolidado")
+                            }
+                        }
+                        if (onManageStaffClick != null) {
+                            Button(
+                                onClick = onManageStaffClick,
+                                modifier = Modifier.testTag(HomeTestTags.MANAGE_STAFF_BUTTON),
+                            ) {
+                                Text(text = "Personal interno")
+                            }
+                        }
                     }
                 }
             }

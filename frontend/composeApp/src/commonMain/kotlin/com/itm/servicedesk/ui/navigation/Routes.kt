@@ -40,3 +40,6 @@ data object CreateStaffRoute
 data class AttentionDetailRoute(
     val code: String,
 )
+
+@Serializable
+data object CoordinationReportsRoute

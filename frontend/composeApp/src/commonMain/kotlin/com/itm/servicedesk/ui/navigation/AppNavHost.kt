@@ -28,6 +28,7 @@ import com.itm.servicedesk.ui.screens.auth.RegisterScreen
 import com.itm.servicedesk.ui.screens.home.AgentHomeScreen
 import com.itm.servicedesk.ui.screens.home.ApplicantHomeScreen
 import com.itm.servicedesk.ui.screens.home.CoordinatorHomeScreen
+import com.itm.servicedesk.ui.screens.reports.CoordinationReportsScreen
 import com.itm.servicedesk.ui.screens.requests.CreateRequestScreen
 import com.itm.servicedesk.ui.screens.requests.RequestDetailScreen
 import com.itm.servicedesk.ui.screens.staff.CreateStaffScreen
@@ -46,6 +47,7 @@ import com.itm.servicedesk.viewmodel.StaffListViewModel
 import com.itm.servicedesk.viewmodel.attention.AgentInboxViewModel
 import com.itm.servicedesk.viewmodel.attention.AttentionDetailViewModel
 import com.itm.servicedesk.viewmodel.attention.CoordinationPendingViewModel
+import com.itm.servicedesk.viewmodel.reports.CoordinationReportsViewModel
 import com.itm.servicedesk.viewmodel.requests.CreateRequestEvent
 import com.itm.servicedesk.viewmodel.requests.CreateRequestViewModel
 import com.itm.servicedesk.viewmodel.requests.MyRequestsViewModel
@@ -399,8 +401,64 @@ fun AppNavHost(
                                 launchSingleTop = true
                             }
                         },
+                        onOpenReportsClick = {
+                            navController.navigate(CoordinationReportsRoute) {
+                                launchSingleTop = true
+                            }
+                        },
                         onLogoutClick = sessionViewModel::requestLogout,
                     )
+                }
+            }
+
+            composable<CoordinationReportsRoute> {
+                RequireRole(
+                    sessionState = sessionState,
+                    allowedRoles = setOf(UserRole.COORDINADOR),
+                    onGoHome = { role -> navigateToRoleHome(navController, role) },
+                    onRequireLogin = { navigateToLoginRoot(navController) },
+                ) {
+                    val user = (sessionState as SessionUiState.Authenticated).user
+                    val reportsViewModel: CoordinationReportsViewModel = koinViewModel()
+                    val reportsUiState by reportsViewModel.uiState.collectAsState()
+
+                    LaunchedEffect(Unit) {
+                        reportsViewModel.loadInitial()
+                    }
+
+                    Scaffold(
+                        modifier = Modifier.fillMaxSize(),
+                        topBar = {
+                            AuthenticatedTopBar(
+                                title = "Reportes y consolidado",
+                                userFullName = user.fullName,
+                                roleLabel = "Coordinador",
+                                onLogoutClick = sessionViewModel::requestLogout,
+                                onBackClick = { navController.popBackStack() },
+                            )
+                        },
+                    ) { innerPadding ->
+                        CoordinationReportsScreen(
+                            uiState = reportsUiState,
+                            onFromDateChanged = reportsViewModel::onFromDateChanged,
+                            onToDateChanged = reportsViewModel::onToDateChanged,
+                            onStatusFilterChanged = reportsViewModel::onStatusFilterChanged,
+                            onCategoryFilterChanged = reportsViewModel::onCategoryFilterChanged,
+                            onPriorityFilterChanged = reportsViewModel::onPriorityFilterChanged,
+                            onAssigneeFilterChanged = reportsViewModel::onAssigneeFilterChanged,
+                            onApplyFilters = reportsViewModel::onApplyFilters,
+                            onClearFilters = reportsViewModel::onClearFilters,
+                            onPreviousPage = reportsViewModel::onPreviousPage,
+                            onNextPage = reportsViewModel::onNextPage,
+                            onRetry = reportsViewModel::onRetry,
+                            onOpenDetail = { code ->
+                                navController.navigate(AttentionDetailRoute(code = code)) {
+                                    launchSingleTop = true
+                                }
+                            },
+                            modifier = Modifier.padding(innerPadding),
+                        )
+                    }
                 }
             }
 
