@@ -11,6 +11,7 @@ import com.itm.servicedesk.domain.time.BogotaTimeProvider
 import com.itm.servicedesk.domain.time.TimeProvider
 import com.itm.servicedesk.repository.ExposedAttentionRepository
 import com.itm.servicedesk.repository.ExposedHealthRepository
+import com.itm.servicedesk.repository.ExposedReportRepository
 import com.itm.servicedesk.repository.ExposedRevokedTokenRepository
 import com.itm.servicedesk.repository.ExposedServiceRequestRepository
 import com.itm.servicedesk.repository.ExposedUserRepository
@@ -18,6 +19,7 @@ import com.itm.servicedesk.repository.ExposedUserSeedRepository
 import com.itm.servicedesk.routing.attentionRouting
 import com.itm.servicedesk.routing.authRouting
 import com.itm.servicedesk.routing.healthRouting
+import com.itm.servicedesk.routing.reportRouting
 import com.itm.servicedesk.routing.serviceRequestRouting
 import com.itm.servicedesk.routing.staffRouting
 import com.itm.servicedesk.service.AttentionService
@@ -28,6 +30,7 @@ import com.itm.servicedesk.service.BcryptPasswordHasher
 import com.itm.servicedesk.service.CoordinatorSeedService
 import com.itm.servicedesk.service.HealthService
 import com.itm.servicedesk.service.JwtTokenService
+import com.itm.servicedesk.service.ReportService
 import com.itm.servicedesk.service.ServiceRequestService
 import com.itm.servicedesk.service.StaffService
 import io.ktor.server.application.Application
@@ -97,6 +100,8 @@ fun Application.configureModule(
         ExposedServiceRequestRepository(dbConnection.database, appConfig.server.timezone)
     val attentionRepository =
         ExposedAttentionRepository(dbConnection.database, appConfig.server.timezone)
+    val reportRepository =
+        ExposedReportRepository(dbConnection.database, appConfig.server.timezone)
     val passwordHasher = BcryptPasswordHasher()
     val tokenProvider = JwtTokenService(appConfig.jwt, appConfig.server.timezone)
 
@@ -125,6 +130,12 @@ fun Application.configureModule(
             userRepository = userRepository,
             timeProvider = timeProvider,
         )
+    val reportService =
+        ReportService(
+            reportRepository = reportRepository,
+            timeProvider = timeProvider,
+            timezone = appConfig.server.timezone,
+        )
     val autoCloseService =
         AutoCloseService(
             attentionRepository = attentionRepository,
@@ -148,5 +159,6 @@ fun Application.configureModule(
         staffRouting(staffService, appConfig.server.timezone)
         serviceRequestRouting(serviceRequestService, appConfig.server.timezone)
         attentionRouting(attentionService, appConfig.server.timezone)
+        reportRouting(reportService, appConfig.server.timezone)
     }
 }
