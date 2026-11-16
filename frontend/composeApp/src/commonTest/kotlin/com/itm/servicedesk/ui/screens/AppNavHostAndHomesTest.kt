@@ -19,27 +19,37 @@ import com.itm.servicedesk.data.mapper.StaffUiMapper
 import com.itm.servicedesk.domain.model.AppResult
 import com.itm.servicedesk.domain.model.DomainError
 import com.itm.servicedesk.domain.model.RequestCategory
+import com.itm.servicedesk.domain.model.RequestPriority
 import com.itm.servicedesk.domain.model.RequestStatus
 import com.itm.servicedesk.domain.model.ServiceHealth
 import com.itm.servicedesk.domain.model.UserRole
+import com.itm.servicedesk.domain.repository.AttentionRepository
 import com.itm.servicedesk.domain.repository.AuthRepository
 import com.itm.servicedesk.domain.repository.ServiceRequestRepository
 import com.itm.servicedesk.domain.repository.StaffRepository
 import com.itm.servicedesk.domain.repository.SystemHealthRepository
+import com.itm.servicedesk.domain.validation.AttentionFormValidator
+import com.itm.servicedesk.testing.AttentionTestFixtures
 import com.itm.servicedesk.testing.AuthTestFixtures
+import com.itm.servicedesk.testing.FakeAttentionRepository
 import com.itm.servicedesk.testing.FakeAuthRepository
 import com.itm.servicedesk.testing.FakeServiceRequestRepository
 import com.itm.servicedesk.testing.FakeStaffRepository
 import com.itm.servicedesk.testing.InMemoryTestSessionStorage
 import com.itm.servicedesk.testing.RequestTestFixtures
+import com.itm.servicedesk.ui.components.AttentionActionPanelTestTags
 import com.itm.servicedesk.ui.components.CancelDialogTestTags
 import com.itm.servicedesk.ui.components.ConfirmDialogTestTags
 import com.itm.servicedesk.ui.components.RequireRoleTestTags
 import com.itm.servicedesk.ui.components.TopBarTestTags
 import com.itm.servicedesk.ui.navigation.AppNavHost
+import com.itm.servicedesk.ui.navigation.AttentionDetailRoute
 import com.itm.servicedesk.ui.navigation.CreateRequestRoute
 import com.itm.servicedesk.ui.navigation.RequestDetailRoute
 import com.itm.servicedesk.ui.navigation.ServiceDeskAppRoot
+import com.itm.servicedesk.ui.screens.attention.AgentInboxTestTags
+import com.itm.servicedesk.ui.screens.attention.AttentionDetailTestTags
+import com.itm.servicedesk.ui.screens.attention.CoordinationPendingTestTags
 import com.itm.servicedesk.ui.screens.auth.LoginTestTags
 import com.itm.servicedesk.ui.screens.auth.RegisterTestTags
 import com.itm.servicedesk.ui.screens.home.AgentHomeScreen
@@ -58,6 +68,11 @@ import com.itm.servicedesk.viewmodel.SessionViewModel
 import com.itm.servicedesk.viewmodel.StaffListViewModel
 import com.itm.servicedesk.viewmodel.StartupUiMapper
 import com.itm.servicedesk.viewmodel.StartupViewModel
+import com.itm.servicedesk.viewmodel.attention.AgentInboxUiState
+import com.itm.servicedesk.viewmodel.attention.AgentInboxViewModel
+import com.itm.servicedesk.viewmodel.attention.AttentionDetailViewModel
+import com.itm.servicedesk.viewmodel.attention.CoordinationPendingUiState
+import com.itm.servicedesk.viewmodel.attention.CoordinationPendingViewModel
 import com.itm.servicedesk.viewmodel.requests.CreateRequestViewModel
 import com.itm.servicedesk.viewmodel.requests.MyRequestsViewModel
 import com.itm.servicedesk.viewmodel.requests.RequestDetailViewModel
@@ -94,6 +109,7 @@ class AppNavHostAndHomesTest : ComposeUiTestBase() {
         authRepository: AuthRepository = FakeAuthRepository(),
         staffRepository: StaffRepository = FakeStaffRepository(),
         serviceRequestRepository: ServiceRequestRepository = FakeServiceRequestRepository(),
+        attentionRepository: AttentionRepository = FakeAttentionRepository(),
     ) {
         stopKoin()
         startKoin {
@@ -105,8 +121,10 @@ class AppNavHostAndHomesTest : ComposeUiTestBase() {
                     single { authRepository }
                     single { staffRepository }
                     single { serviceRequestRepository }
+                    single { attentionRepository }
                     single { StaffUiMapper() }
                     single { RequestUiMapper() }
+                    single { AttentionFormValidator() }
                     factory { StartupUiMapper() }
                     viewModel { StartupViewModel(repository = get(), uiMapper = get()) }
                     viewModel {
@@ -123,16 +141,26 @@ class AppNavHostAndHomesTest : ComposeUiTestBase() {
                     viewModel { MyRequestsViewModel(repository = get(), uiMapper = get()) }
                     viewModel { CreateRequestViewModel(repository = get()) }
                     viewModel { RequestDetailViewModel(repository = get(), uiMapper = get()) }
+                    viewModel { CoordinationPendingViewModel(attentionRepository = get()) }
+                    viewModel { AgentInboxViewModel(attentionRepository = get()) }
+                    viewModel {
+                        AttentionDetailViewModel(
+                            attentionRepository = get(),
+                            staffRepository = get(),
+                            validator = get(),
+                        )
+                    }
                 },
             )
         }
     }
 
     @Test
-    fun `CoordinatorHomeScreen renders user details and triggers actions`() =
+    fun `CoordinatorHomeScreen renders pending queue and triggers actions`() =
         runComposeUiTest {
             var manageStaffClicks = 0
             var coordinatorLogoutClicks = 0
+            var openedCode: String? = null
 
             val coordinator =
                 AuthTestFixtures.userProfile(
@@ -145,6 +173,16 @@ class AppNavHostAndHomesTest : ComposeUiTestBase() {
                 ServiceDeskTheme {
                     CoordinatorHomeScreen(
                         user = coordinator,
+                        uiState =
+                            CoordinationPendingUiState(
+                                items = listOf(AttentionTestFixtures.requestSummary(code = "SOL-2026-00019")),
+                                totalItems = 1,
+                            ),
+                        onSelectStatusFilter = {},
+                        onPreviousPage = {},
+                        onNextPage = {},
+                        onRetry = {},
+                        onOpenDetail = { openedCode = it },
                         onManageStaffClick = { manageStaffClicks += 1 },
                         onLogoutClick = { coordinatorLogoutClicks += 1 },
                     )
@@ -152,18 +190,21 @@ class AppNavHostAndHomesTest : ComposeUiTestBase() {
             }
 
             onNodeWithTag(HomeTestTags.COORDINATOR_HOME).assertIsDisplayed()
-            onNodeWithText("Bienvenido, Ana Sofía Coordinator").assertIsDisplayed()
+            onNodeWithText("Pendientes de coordinación").assertIsDisplayed()
+            onNodeWithTag(CoordinationPendingTestTags.item("SOL-2026-00019")).performClick()
             onNodeWithTag(HomeTestTags.MANAGE_STAFF_BUTTON).performClick()
             onNodeWithTag(TopBarTestTags.LOGOUT_BUTTON).performClick()
 
+            assertEquals("SOL-2026-00019", openedCode)
             assertEquals(1, manageStaffClicks)
             assertEquals(1, coordinatorLogoutClicks)
         }
 
     @Test
-    fun `AgentHomeScreen renders user details and triggers logout action`() =
+    fun `AgentHomeScreen renders assigned inbox and triggers logout action`() =
         runComposeUiTest {
             var agentLogoutClicks = 0
+            var openedCode: String? = null
             val agent =
                 AuthTestFixtures.userProfile(
                     fullName = "Carlos Mejía",
@@ -175,14 +216,34 @@ class AppNavHostAndHomesTest : ComposeUiTestBase() {
                 ServiceDeskTheme {
                     AgentHomeScreen(
                         user = agent,
+                        uiState =
+                            AgentInboxUiState(
+                                items =
+                                    listOf(
+                                        AttentionTestFixtures.requestSummary(
+                                            code = "SOL-2026-00025",
+                                            status = RequestStatus.EN_REVISION,
+                                            priority = RequestPriority.ALTA,
+                                        ),
+                                    ),
+                                totalItems = 1,
+                            ),
+                        onSelectStatusFilter = {},
+                        onPreviousPage = {},
+                        onNextPage = {},
+                        onRetry = {},
+                        onOpenDetail = { openedCode = it },
                         onLogoutClick = { agentLogoutClicks += 1 },
                     )
                 }
             }
 
             onNodeWithTag(HomeTestTags.AGENT_HOME).assertIsDisplayed()
-            onNodeWithText("Bienvenido, Carlos Mejía").assertIsDisplayed()
+            onNodeWithText("Bandeja de atención").assertIsDisplayed()
+            onNodeWithTag(AgentInboxTestTags.item("SOL-2026-00025")).performClick()
             onNodeWithTag(TopBarTestTags.LOGOUT_BUTTON).performClick()
+
+            assertEquals("SOL-2026-00025", openedCode)
             assertEquals(1, agentLogoutClicks)
         }
 
@@ -568,5 +629,135 @@ class AppNavHostAndHomesTest : ComposeUiTestBase() {
                 onAllNodesWithTag(RequireRoleTestTags.FORBIDDEN_CARD).fetchSemanticsNodes().isNotEmpty()
             }
             onNodeWithTag(RequireRoleTestTags.FORBIDDEN_CARD).assertIsDisplayed()
+        }
+
+    @Test
+    fun `AppNavHost enforces RequireRole on AttentionDetailRoute for SOLICITANTE`() =
+        runComposeUiTest {
+            val applicant = AuthTestFixtures.userProfile(role = UserRole.SOLICITANTE)
+            startTestKoin(
+                initialToken = "valid-applicant-jwt",
+                authRepository = FakeAuthRepository(getCurrentUserHandler = { AppResult.Success(applicant) }),
+            )
+            lateinit var controller: NavHostController
+            setContent {
+                ServiceDeskTheme {
+                    controller = rememberNavController()
+                    AppNavHost(navController = controller)
+                }
+            }
+
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(HomeTestTags.APPLICANT_HOME).fetchSemanticsNodes().isNotEmpty()
+            }
+            runOnIdle {
+                controller.navigate(AttentionDetailRoute(code = "SOL-2026-00019"))
+            }
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(RequireRoleTestTags.FORBIDDEN_CARD).fetchSemanticsNodes().isNotEmpty()
+            }
+            onNodeWithTag(RequireRoleTestTags.FORBIDDEN_CARD).assertIsDisplayed()
+        }
+
+    @Test
+    fun `AppNavHost navigates Coordinator from pending queue to AttentionDetailRoute and assigns`() =
+        runComposeUiTest {
+            val coordinator = AuthTestFixtures.userProfile(role = UserRole.COORDINADOR)
+            val agent = AuthTestFixtures.staffMember(id = "agent-1", fullName = "Carlos Andrés Mejía")
+            val attentionRepo = FakeAttentionRepository()
+            val staffRepo =
+                FakeStaffRepository(
+                    listStaffHandler = { page, size, _ ->
+                        AppResult.Success(AuthTestFixtures.staffPage(items = listOf(agent), page = page, size = size))
+                    },
+                )
+            startTestKoin(
+                initialToken = "valid-coord-jwt",
+                authRepository = FakeAuthRepository(getCurrentUserHandler = { AppResult.Success(coordinator) }),
+                staffRepository = staffRepo,
+                attentionRepository = attentionRepo,
+            )
+
+            setContent {
+                ServiceDeskAppRoot()
+            }
+
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(CoordinationPendingTestTags.item("SOL-2026-00019"))
+                    .fetchSemanticsNodes()
+                    .isNotEmpty()
+            }
+            onNodeWithTag(CoordinationPendingTestTags.item("SOL-2026-00019")).performClick()
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(AttentionDetailTestTags.CODE).fetchSemanticsNodes().isNotEmpty()
+            }
+
+            onNodeWithTag(AttentionActionPanelTestTags.AGENT_DROPDOWN).performScrollTo().performClick()
+            onNodeWithTag(AttentionActionPanelTestTags.agentOption("agent-1")).performClick()
+            onNodeWithTag(AttentionActionPanelTestTags.priorityChip(RequestPriority.ALTA))
+                .performScrollTo()
+                .performClick()
+            onNodeWithTag(AttentionActionPanelTestTags.ASSIGN_SUBMIT_BUTTON).performScrollTo().performClick()
+
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(ConfirmDialogTestTags.DIALOG).fetchSemanticsNodes().isNotEmpty()
+            }
+            onNodeWithTag(ConfirmDialogTestTags.ACCEPT_BUTTON).performClick()
+
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(AttentionDetailTestTags.SUCCESS_BANNER).fetchSemanticsNodes().isNotEmpty()
+            }
+            assertEquals(1, attentionRepo.assignCalls.size)
+            onNodeWithTag(AttentionDetailTestTags.SUCCESS_BANNER).performScrollTo().assertIsDisplayed()
+        }
+
+    @Test
+    fun `AppNavHost navigates Agent from inbox to AttentionDetailRoute and adds intervention without staff call`() =
+        runComposeUiTest {
+            val agentUser = AuthTestFixtures.userProfile(role = UserRole.PERSONAL_ATENCION)
+            val attentionRepo =
+                FakeAttentionRepository(
+                    getInternalDetailHandler = { code ->
+                        AppResult.Success(
+                            AttentionTestFixtures.requestDetail(
+                                code = code,
+                                status = RequestStatus.EN_REVISION,
+                                priority = RequestPriority.ALTA,
+                                assignedAgentId = "agent-1",
+                                assignedAgentName = "Carlos Andrés Mejía",
+                            ),
+                        )
+                    },
+                )
+            val staffRepo = FakeStaffRepository()
+            startTestKoin(
+                initialToken = "valid-agent-jwt",
+                authRepository = FakeAuthRepository(getCurrentUserHandler = { AppResult.Success(agentUser) }),
+                staffRepository = staffRepo,
+                attentionRepository = attentionRepo,
+            )
+
+            setContent {
+                ServiceDeskAppRoot()
+            }
+
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(AgentInboxTestTags.item("SOL-2026-00019")).fetchSemanticsNodes().isNotEmpty()
+            }
+            onNodeWithTag(AgentInboxTestTags.item("SOL-2026-00019")).performClick()
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(AttentionActionPanelTestTags.INTERVENTION_INPUT).fetchSemanticsNodes().isNotEmpty()
+            }
+
+            onNodeWithTag(AttentionActionPanelTestTags.INTERVENTION_INPUT)
+                .performScrollTo()
+                .performTextInput("Revisión técnica realizada en plataforma.")
+            onNodeWithTag(AttentionActionPanelTestTags.INTERVENTION_SUBMIT_BUTTON).performScrollTo().performClick()
+
+            waitUntil(timeoutMillis = 5_000L) {
+                onAllNodesWithTag(AttentionDetailTestTags.SUCCESS_BANNER).fetchSemanticsNodes().isNotEmpty()
+            }
+            assertEquals(0, staffRepo.listCalls.size)
+            assertEquals(1, attentionRepo.interventionCalls.size)
         }
 }

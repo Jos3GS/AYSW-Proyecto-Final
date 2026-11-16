@@ -22,6 +22,7 @@ import com.itm.servicedesk.domain.model.UserRole
 import com.itm.servicedesk.ui.components.AuthenticatedTopBar
 import com.itm.servicedesk.ui.components.ConfirmationDialog
 import com.itm.servicedesk.ui.components.RequireRole
+import com.itm.servicedesk.ui.screens.attention.AttentionDetailScreen
 import com.itm.servicedesk.ui.screens.auth.LoginScreen
 import com.itm.servicedesk.ui.screens.auth.RegisterScreen
 import com.itm.servicedesk.ui.screens.home.AgentHomeScreen
@@ -42,6 +43,9 @@ import com.itm.servicedesk.viewmodel.SessionNavigationEvent
 import com.itm.servicedesk.viewmodel.SessionUiState
 import com.itm.servicedesk.viewmodel.SessionViewModel
 import com.itm.servicedesk.viewmodel.StaffListViewModel
+import com.itm.servicedesk.viewmodel.attention.AgentInboxViewModel
+import com.itm.servicedesk.viewmodel.attention.AttentionDetailViewModel
+import com.itm.servicedesk.viewmodel.attention.CoordinationPendingViewModel
 import com.itm.servicedesk.viewmodel.requests.CreateRequestEvent
 import com.itm.servicedesk.viewmodel.requests.CreateRequestViewModel
 import com.itm.servicedesk.viewmodel.requests.MyRequestsViewModel
@@ -339,8 +343,25 @@ fun AppNavHost(
                     onRequireLogin = { navigateToLoginRoot(navController) },
                 ) {
                     val user = (sessionState as SessionUiState.Authenticated).user
+                    val inboxViewModel: AgentInboxViewModel = koinViewModel()
+                    val inboxUiState by inboxViewModel.uiState.collectAsState()
+
+                    LaunchedEffect(Unit) {
+                        inboxViewModel.loadAssigned()
+                    }
+
                     AgentHomeScreen(
                         user = user,
+                        uiState = inboxUiState,
+                        onSelectStatusFilter = inboxViewModel::selectStatusFilter,
+                        onPreviousPage = inboxViewModel::previousPage,
+                        onNextPage = inboxViewModel::nextPage,
+                        onRetry = inboxViewModel::refresh,
+                        onOpenDetail = { code ->
+                            navController.navigate(AttentionDetailRoute(code = code)) {
+                                launchSingleTop = true
+                            }
+                        },
                         onLogoutClick = sessionViewModel::requestLogout,
                     )
                 }
@@ -354,8 +375,25 @@ fun AppNavHost(
                     onRequireLogin = { navigateToLoginRoot(navController) },
                 ) {
                     val user = (sessionState as SessionUiState.Authenticated).user
+                    val pendingViewModel: CoordinationPendingViewModel = koinViewModel()
+                    val pendingUiState by pendingViewModel.uiState.collectAsState()
+
+                    LaunchedEffect(Unit) {
+                        pendingViewModel.loadPending()
+                    }
+
                     CoordinatorHomeScreen(
                         user = user,
+                        uiState = pendingUiState,
+                        onSelectStatusFilter = pendingViewModel::selectStatusFilter,
+                        onPreviousPage = pendingViewModel::previousPage,
+                        onNextPage = pendingViewModel::nextPage,
+                        onRetry = pendingViewModel::refresh,
+                        onOpenDetail = { code ->
+                            navController.navigate(AttentionDetailRoute(code = code)) {
+                                launchSingleTop = true
+                            }
+                        },
                         onManageStaffClick = {
                             navController.navigate(StaffListRoute) {
                                 launchSingleTop = true
@@ -363,6 +401,65 @@ fun AppNavHost(
                         },
                         onLogoutClick = sessionViewModel::requestLogout,
                     )
+                }
+            }
+
+            composable<AttentionDetailRoute> { backStackEntry ->
+                RequireRole(
+                    sessionState = sessionState,
+                    allowedRoles = setOf(UserRole.COORDINADOR, UserRole.PERSONAL_ATENCION),
+                    onGoHome = { role -> navigateToRoleHome(navController, role) },
+                    onRequireLogin = { navigateToLoginRoot(navController) },
+                ) {
+                    val user = (sessionState as SessionUiState.Authenticated).user
+                    val route = backStackEntry.toRoute<AttentionDetailRoute>()
+                    val detailViewModel: AttentionDetailViewModel = koinViewModel()
+                    val detailUiState by detailViewModel.uiState.collectAsState()
+
+                    LaunchedEffect(route.code, user.role) {
+                        detailViewModel.loadDetail(code = route.code, userRole = user.role)
+                    }
+
+                    Scaffold(
+                        modifier = Modifier.fillMaxSize(),
+                        topBar = {
+                            AuthenticatedTopBar(
+                                title = "Detalle ${route.code}",
+                                userFullName = user.fullName,
+                                roleLabel =
+                                    if (user.role == UserRole.COORDINADOR) {
+                                        "Coordinador"
+                                    } else {
+                                        "Personal de atención"
+                                    },
+                                onLogoutClick = sessionViewModel::requestLogout,
+                                onBackClick = { navController.popBackStack() },
+                            )
+                        },
+                    ) { innerPadding ->
+                        AttentionDetailScreen(
+                            uiState = detailUiState,
+                            userRole = user.role,
+                            onSelectAgent = detailViewModel::onSelectAgent,
+                            onRetryLoadAgents = detailViewModel::retryLoadAgents,
+                            onSelectPriority = detailViewModel::onSelectPriority,
+                            onReassignmentReasonChange = detailViewModel::onReassignmentReasonChange,
+                            onRequestAssign = detailViewModel::requestAssignConfirmation,
+                            onRequestReassign = detailViewModel::requestReassignConfirmation,
+                            onSelectAgentTab = detailViewModel::onSelectAgentTab,
+                            onInterventionCommentChange = detailViewModel::onInterventionCommentChange,
+                            onSubmitIntervention = detailViewModel::submitIntervention,
+                            onEscalationReasonChange = detailViewModel::onEscalationReasonChange,
+                            onRequestEscalate = detailViewModel::requestEscalateConfirmation,
+                            onResponseTextChange = detailViewModel::onResponseTextChange,
+                            onRequestRespond = detailViewModel::requestRespondConfirmation,
+                            onConfirmPendingAction = detailViewModel::confirmPendingAction,
+                            onDismissConfirmation = detailViewModel::dismissConfirmation,
+                            onRetryLoadDetail = detailViewModel::retryLoadDetail,
+                            onBackToList = { navController.popBackStack() },
+                            modifier = Modifier.padding(innerPadding),
+                        )
+                    }
                 }
             }
 
