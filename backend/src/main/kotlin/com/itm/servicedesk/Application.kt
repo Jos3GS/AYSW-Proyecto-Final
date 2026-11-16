@@ -7,16 +7,23 @@ import com.itm.servicedesk.config.configureSecurityPlugins
 import com.itm.servicedesk.config.configureStatusPages
 import com.itm.servicedesk.config.security.configureJwtAuth
 import com.itm.servicedesk.domain.builder.AppConfig
+import com.itm.servicedesk.domain.time.BogotaTimeProvider
+import com.itm.servicedesk.domain.time.TimeProvider
+import com.itm.servicedesk.repository.ExposedAttentionRepository
 import com.itm.servicedesk.repository.ExposedHealthRepository
 import com.itm.servicedesk.repository.ExposedRevokedTokenRepository
 import com.itm.servicedesk.repository.ExposedServiceRequestRepository
 import com.itm.servicedesk.repository.ExposedUserRepository
 import com.itm.servicedesk.repository.ExposedUserSeedRepository
+import com.itm.servicedesk.routing.attentionRouting
 import com.itm.servicedesk.routing.authRouting
 import com.itm.servicedesk.routing.healthRouting
 import com.itm.servicedesk.routing.serviceRequestRouting
 import com.itm.servicedesk.routing.staffRouting
+import com.itm.servicedesk.service.AttentionService
 import com.itm.servicedesk.service.AuthService
+import com.itm.servicedesk.service.AutoCloseScheduler
+import com.itm.servicedesk.service.AutoCloseService
 import com.itm.servicedesk.service.BcryptPasswordHasher
 import com.itm.servicedesk.service.CoordinatorSeedService
 import com.itm.servicedesk.service.HealthService
@@ -48,6 +55,7 @@ fun Application.configureModule(
     appConfig: AppConfig,
     healthServiceOverride: HealthService? = null,
     seedOnStartup: Boolean = true,
+    timeProviderOverride: TimeProvider? = null,
 ) {
     TimeZone.setDefault(TimeZone.getTimeZone(appConfig.server.timezone))
 
@@ -74,6 +82,8 @@ fun Application.configureModule(
         ).seedIfAbsent(appConfig.seedCoordinator)
     }
 
+    val timeProvider = timeProviderOverride ?: BogotaTimeProvider(appConfig.server.timezone)
+
     val healthRepository = ExposedHealthRepository(dbConnection.database)
     val healthService =
         HealthService(
@@ -85,6 +95,8 @@ fun Application.configureModule(
     val revokedTokenRepository = ExposedRevokedTokenRepository(dbConnection.database)
     val serviceRequestRepository =
         ExposedServiceRequestRepository(dbConnection.database, appConfig.server.timezone)
+    val attentionRepository =
+        ExposedAttentionRepository(dbConnection.database, appConfig.server.timezone)
     val passwordHasher = BcryptPasswordHasher()
     val tokenProvider = JwtTokenService(appConfig.jwt, appConfig.server.timezone)
 
@@ -107,6 +119,21 @@ fun Application.configureModule(
             serviceRequestRepository = serviceRequestRepository,
             timezone = appConfig.server.timezone,
         )
+    val attentionService =
+        AttentionService(
+            attentionRepository = attentionRepository,
+            userRepository = userRepository,
+            timeProvider = timeProvider,
+        )
+    val autoCloseService =
+        AutoCloseService(
+            attentionRepository = attentionRepository,
+            timeProvider = timeProvider,
+        )
+    AutoCloseScheduler(
+        autoCloseService = autoCloseService,
+        intervalSeconds = appConfig.server.autoCloseIntervalSeconds,
+    ).registerLifecycle(this)
 
     configureJwtAuth(
         jwtConfig = appConfig.jwt,
@@ -120,5 +147,6 @@ fun Application.configureModule(
         authRouting(authService, appConfig.server.timezone)
         staffRouting(staffService, appConfig.server.timezone)
         serviceRequestRouting(serviceRequestService, appConfig.server.timezone)
+        attentionRouting(attentionService, appConfig.server.timezone)
     }
 }

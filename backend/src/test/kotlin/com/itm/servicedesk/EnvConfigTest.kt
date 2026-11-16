@@ -73,7 +73,24 @@ class EnvConfigTest {
         assertEquals(listOf("http://localhost:8081", "http://127.0.0.1:8081"), config.server.corsAllowedOrigins)
         assertEquals(10, config.database.maxPoolSize)
         assertEquals(3600L, config.jwt.expirationSeconds)
+        assertEquals(60L, config.server.autoCloseIntervalSeconds)
         assertEquals("coordinador@itm.edu.co", config.seedCoordinator.email)
+
+        val overridden =
+            EnvConfig.toAppConfig(
+                envFilePath = envFile,
+                systemEnv = mapOf("AUTO_CLOSE_INTERVAL_SECONDS" to "30"),
+            )
+        assertEquals(30L, overridden.server.autoCloseIntervalSeconds)
+
+        val invalidEx =
+            assertFailsWith<DomainException.ValidationException> {
+                EnvConfig.toAppConfig(
+                    envFilePath = envFile,
+                    systemEnv = mapOf("AUTO_CLOSE_INTERVAL_SECONDS" to "not-a-number"),
+                )
+            }
+        assertEquals(400, invalidEx.httpStatus)
     }
 
     @Test

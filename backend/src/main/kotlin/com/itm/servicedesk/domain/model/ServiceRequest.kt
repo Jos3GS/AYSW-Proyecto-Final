@@ -24,4 +24,9 @@ data class ServiceRequest(
     val closedAt: OffsetDateTime? = null,
     val createdAt: OffsetDateTime,
     val updatedAt: OffsetDateTime,
-)
+) {
+    fun isOverdue(now: OffsetDateTime): Boolean =
+        (status == RequestStatus.EN_REVISION || status == RequestStatus.ESCALADA) &&
+            dueAt != null &&
+            now.isAfter(dueAt)
+}

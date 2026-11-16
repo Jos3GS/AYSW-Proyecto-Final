@@ -21,6 +21,6 @@
 - [x] No quedan puntos pendientes marcados con `[NECESITA ACLARACIÓN]`.
 
 ## 3. Preparación para Implementación (`tasks.md`)
-- [ ] El plan de tareas atómicas (`specs/004-attention-lifecycle/tasks.md`) está redactado y aprobado en orden TDD.
-- [ ] Cada tarea de `tasks.md` define su criterio de verificación ejecutable (`ktlintCheck`, `./gradlew test`, `koverVerify`).
-- [ ] Aprobación explícita final para iniciar la implementación de `004-attention-lifecycle` (Backend) *(una vez completada la planificación del resto de épicas o autorizada la fase de código)*.
+- [x] El plan de tareas atómicas (`specs/004-attention-lifecycle/tasks.md`) está redactado y aprobado en orden TDD.
+- [x] Cada tarea de `tasks.md` define su criterio de verificación ejecutable (`ktlintCheck`, `./gradlew test`, `koverVerify`).
+- [x] Aprobación explícita final para iniciar la implementación de `004-attention-lifecycle` (Backend) *(implementado y verificado al 100%)*.
