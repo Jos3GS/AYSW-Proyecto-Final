@@ -10,7 +10,7 @@ API RESTful del sistema **ITM Service Desk**, construida con **Kotlin 2.4.x**, *
   - `routing -> service -> domain`
   - `service -> repository -> domain`
   - `domain/` es completamente independiente de Ktor, Exposed, HikariCP y JDBC.
-- **Persistencia:** Exclusivamente **Exposed 1.6.x DSL** (`UsersTable`, `RevokedTokensTable`, `RequestCodeSequencesTable`, `ServiceRequestsTable`, `RequestHistoryTable`, `ExposedHealthRepository`, `ExposedUserSeedRepository`, `ExposedUserRepository`, `ExposedRevokedTokenRepository`, `ExposedServiceRequestRepository`, `ExposedAttentionRepository`) + **HikariCP** (`connectionTimeout = 2000ms`, `validationTimeout = 1500ms`) + **Flyway** (`V1__create_users_table.sql`, `V2__create_revoked_tokens_table.sql`, `V3__create_service_requests_tables.sql`, `V4__add_autoclose_partial_index.sql`).
+- **Persistencia:** Exclusivamente **Exposed 1.6.x DSL** (`UsersTable`, `RevokedTokensTable`, `RequestCodeSequencesTable`, `ServiceRequestsTable`, `RequestHistoryTable`, `ExposedHealthRepository`, `ExposedUserSeedRepository`, `ExposedUserRepository`, `ExposedRevokedTokenRepository`, `ExposedServiceRequestRepository`, `ExposedAttentionRepository`, `ExposedReportRepository`) + **HikariCP** (`connectionTimeout = 2000ms`, `validationTimeout = 1500ms`) + **Flyway** (`V1__create_users_table.sql`, `V2__create_revoked_tokens_table.sql`, `V3__create_service_requests_tables.sql`, `V4__add_autoclose_partial_index.sql`, `V5__add_coordination_reports_indexes.sql`).
 - **Configuración y Secretos:** `EnvConfig` (Kotlin puro, prioridad a `System.getenv()` con fallback a `.env`) + `AppConfigBuilder` (Patrón GoF **Builder**), ocultando contraseñas, cadenas JDBC y secretos en `toString()`. Incluye `AUTO_CLOSE_INTERVAL_SECONDS=60` (`> 0`).
 - **Autenticación, Blacklist y RBAC (`002-auth-users`):**
   - **JWT (`HMAC256`, `exp = 1h / 3600s`):** Configurado con `JWT_EXPIRATION_SECONDS=3600`, emisión de `jti` UUID único por `register` / `login` y validación en `JwtAuthConfig` contra la blacklist persistente `revoked_tokens` (con purga automática `expires_at < NOW()` en `logout`).
@@ -25,6 +25,10 @@ API RESTful del sistema **ITM Service Desk**, construida con **Kotlin 2.4.x**, *
   - **Política SLA e Invariante de Reasignación:** `ALTA = 24h`, `MEDIA = 72h`, `BAJA = 120h`. Al asignar (`ABIERTA -> EN_REVISION`) se fija `firstAssignedAt = now` y `dueAt = firstAssignedAt + slaHours`. Al reasignar tras escalamiento (`ESCALADA -> EN_REVISION`), **`firstAssignedAt` jamás se reinicia** y `dueAt` se recalcula como `firstAssignedAt + effectivePriority.slaHours`. `isOverdue` es estrictamente informativo (nunca bloquea transiciones).
   - **Propiedad, Validaciones y Atomicidad:** Solo `COORDINADOR` puede asignar/reasignar (validando en BD usuario activo `PERSONAL_ATENCION`, `400` en caso contrario). Solo el `PERSONAL_ATENCION` asignado (`assignedTo == actorId`) puede registrar intervenciones (`10..1000`), escalar (`10..500`) o emitir respuesta final inmutable (`20..2000`). Todas las transiciones usan `UPDATE ... WHERE id = ? AND status = ?` + `INSERT INTO request_history` (`409` ante carrera).
   - **Cierre Automático `24h` Nativo (`SISTEMA`):** `AutoCloseScheduler` corre con corutinas nativas de Ktor (`ApplicationStarted` / `ApplicationStopping`, cada `AUTO_CLOSE_INTERVAL_SECONDS`), ejecutando `AutoCloseService` en lotes con `FOR UPDATE SKIP LOCKED` sobre el índice parcial `idx_sr_autoclose` (`responded_at <= now - 24h`, `actorId = null`, `actorRole = SISTEMA`, `actorName = "Sistema"`, comentario `"Cierre automático"`).
+- **Consolidado y Reportes de Coordinación (`005-coordination-reports`):**
+  - **Agregaciones SQL Puras en `TRANSACTION_REPEATABLE_READ`:** `ExposedReportRepository` calcula todas las métricas gerenciales (`totalRequests`, `byStatus`, `byCategory`, `byPriority`, `unassignedPriorityCount`, `byAssignee`, `unassignedCount`, `overdueCount`, `resolvedWithinSlaCount`, `resolvedOutsideSlaCount`) directamente en PostgreSQL 18 apoyado por los índices de `V5__add_coordination_reports_indexes.sql`, compartiendo `ServiceRequestsTable.toFilterOp(criteria)` con el listado paginado (`< 2s` con `1.000+` solicitudes).
+  - **Patrón GoF Builder (`ReportFilterBuilder`):** Valida acumulativamente `createdFrom`/`createdTo` en `ZoneId.of("America/Bogota")` usando intervalo semiabierto `[startOfDay(from), startOfDay(to + 1 día))`, enums (`status`, `category`, `priority`), `assignedToId` (UUID) y paginación (`page >= 1`, `size in 1..20`).
+  - **RBAC Estricto y Reutilización con `004`:** Ambos endpoints (`/api/v1/reports/summary` y `/api/v1/reports/requests`) están protegidos exclusivamente con `withRole(UserRole.COORDINADOR)`, y el detalle completo e historial reutilizan `GET /api/v1/attention/requests/{code}`.
 - **Seguridad Perimetral:** Terminación TLS delegada a **Caddy** (`infra/Caddyfile.example`) hacia HTTP local (`APP_PORT=8080`), `XForwardedHeaders` confiable, `IpAllowListPlugin` (IPs exactas y rangos CIDR desde `ALLOWED_CLIENT_IPS`), **CORS estricto** (`CORS_ALLOWED_ORIGINS`, prohibido `*`), zona horaria `America/Bogota` (`-05:00`) y `StatusPages` con respuestas estandarizadas `ApiErrorDto`.
 - **Semilla Idempotente (`RF-01`):** `CoordinatorSeedService` crea al arranque el único usuario `COORDINADOR` inicial con `at.favre.lib:bcrypt` (`0.10.2`, costo **12**) sin duplicarlo en reinicios.
 
@@ -63,7 +67,7 @@ API RESTful del sistema **ITM Service Desk**, construida con **Kotlin 2.4.x**, *
    ```
    Al arrancar:
    - Se valida toda la configuración mediante `AppConfigBuilder`.
-   - Flyway ejecuta automáticamente las migraciones pendientes (`V1__create_users_table.sql`, `V2__create_revoked_tokens_table.sql`, `V3__create_service_requests_tables.sql`, `V4__add_autoclose_partial_index.sql`).
+   - Flyway ejecuta automáticamente las migraciones pendientes (`V1__create_users_table.sql`, `V2__create_revoked_tokens_table.sql`, `V3__create_service_requests_tables.sql`, `V4__add_autoclose_partial_index.sql`, `V5__add_coordination_reports_indexes.sql`).
    - `CoordinatorSeedService` crea de forma idempotente el único usuario `COORDINADOR` semilla.
    - `AutoCloseScheduler` inicia el barrido periódico de cierre automático (`24h`) con corutinas Ktor.
    - Ktor Netty queda escuchando en `http://0.0.0.0:8080`.
@@ -87,7 +91,7 @@ API RESTful del sistema **ITM Service Desk**, construida con **Kotlin 2.4.x**, *
 
 ---
 
-## Endpoints Disponibles (`v0.2.0`)
+## Endpoints Disponibles (`v0.3.0`)
 
 | Método y Ruta | Acceso | Descripción |
 | :--- | :--- | :--- |
@@ -110,6 +114,8 @@ API RESTful del sistema **ITM Service Desk**, construida con **Kotlin 2.4.x**, *
 | `POST /api/v1/attention/requests/{code}/interventions` | JWT (`PERSONAL_ATENCION` asignado) | Registra intervención interna (`10..1000` chars) en `EN_REVISION` sin mutar el estado (`200 OK`). |
 | `POST /api/v1/attention/requests/{code}/escalate` | JWT (`PERSONAL_ATENCION` asignado) | Escala una solicitud (`EN_REVISION -> ESCALADA`) con motivo (`10..500` chars) (`200 OK`). |
 | `POST /api/v1/attention/requests/{code}/respond` | JWT (`PERSONAL_ATENCION` asignado) | Emite respuesta final inmutable (`20..2000` chars, `EN_REVISION -> RESUELTA`) y calcula `respondedWithinSla` (`200 OK`). |
+| `GET /api/v1/reports/summary` | JWT (`COORDINADOR`) | Resumen consolidado con métricas agregadas en SQL y filtros combinables `America/Bogota` (`200 OK` / `400`). |
+| `GET /api/v1/reports/requests` | JWT (`COORDINADOR`) | Listado general paginado (`page >= 1`, `size in 1..20`, `created_at DESC, id DESC`) consistente con `/summary` (`200 OK` / `400`). |
 
 ---
 
