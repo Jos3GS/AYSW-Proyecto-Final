@@ -1,5 +1,6 @@
 package com.itm.servicedesk
 
+import com.itm.servicedesk.config.CaddyBootstrapper
 import com.itm.servicedesk.config.DatabaseFactory
 import com.itm.servicedesk.config.EnvConfig
 import com.itm.servicedesk.config.configureIpAllowList
@@ -41,8 +42,10 @@ import io.ktor.server.routing.routing
 import java.util.TimeZone
 
 fun main() {
-    val appConfig = EnvConfig.toAppConfig()
+    val env = EnvConfig.load()
+    val appConfig = EnvConfig.toAppConfig(systemEnv = env)
     TimeZone.setDefault(TimeZone.getTimeZone(appConfig.server.timezone))
+    CaddyBootstrapper().ensureRunning(env = env)
 
     embeddedServer(
         factory = Netty,

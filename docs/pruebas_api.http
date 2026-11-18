@@ -1,0 +1,276 @@
+### Colección de Pruebas Funcionales HTTP — ITM Service Desk (Guía PF-01)
+### Compatible con IntelliJ HTTP Client / VS Code REST Client.
+### Por defecto apunta al backend HTTP local (http://127.0.0.1:8080).
+### Si deseas probar a través de Caddy TLS, cambia @baseUrl a https://localhost:8443
+
+@baseUrl = http://127.0.0.1:8080
+@coordinatorEmail = coordinador@itm.edu.co
+@coordinatorPassword = ChangeMe1234
+@solicitanteEmail = solicitante.demo@itm.edu.co
+@solicitantePassword = DemoUser123
+@agenteEmail = agente.demo@itm.edu.co
+@agentePassword = AgenteDemo123
+@otroAgenteEmail = agente2.demo@itm.edu.co
+@otroAgentePassword = AgenteDemo123
+
+### ============================================================================
+### 0. HEALTH CHECK Y PREPARACIÓN DE ACTORES (DATOS FICTICIOS)
+### ============================================================================
+
+### Health Check
+GET {{baseUrl}}/api/v1/health
+
+### Login Coordinador (Semilla inicial desde .env)
+# @name loginCoordinator
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{coordinatorEmail}}",
+  "password": "{{coordinatorPassword}}"
+}
+
+> {%
+  if (response.body && response.body.accessToken) {
+    client.global.set("coordToken", response.body.accessToken);
+  }
+%}
+
+### Crear Personal de Atención #1 (Ejecutar una vez como Coordinador)
+# @name createAgent1
+POST {{baseUrl}}/api/v1/users/staff
+Authorization: Bearer {{coordToken}}
+Content-Type: application/json
+
+{
+  "fullName": "Carlos Andres Demo",
+  "documentNumber": "1000000101",
+  "email": "{{agenteEmail}}",
+  "phone": "3001112233",
+  "password": "{{agentePassword}}",
+  "role": "PERSONAL_ATENCION"
+}
+
+> {%
+  if (response.body && response.body.id) {
+    client.global.set("agenteId", response.body.id);
+  }
+%}
+
+### Crear Personal de Atención #2 (Para probar PF-06 / reasignación)
+# @name createAgent2
+POST {{baseUrl}}/api/v1/users/staff
+Authorization: Bearer {{coordToken}}
+Content-Type: application/json
+
+{
+  "fullName": "Laura Maria Demo",
+  "documentNumber": "1000000102",
+  "email": "{{otroAgenteEmail}}",
+  "phone": "3002223344",
+  "password": "{{otroAgentePassword}}",
+  "role": "PERSONAL_ATENCION"
+}
+
+> {%
+  if (response.body && response.body.id) {
+    client.global.set("otroAgenteId", response.body.id);
+  }
+%}
+
+### Listar Personal Interno (para copiar UUID de agente si ya existía)
+GET {{baseUrl}}/api/v1/users/staff?page=1&size=20
+Authorization: Bearer {{coordToken}}
+
+### Registro Público de Solicitante (Ejecutar una vez)
+POST {{baseUrl}}/api/v1/auth/register
+Content-Type: application/json
+
+{
+  "fullName": "Ana Sofia Solicitante",
+  "documentNumber": "1000000201",
+  "email": "{{solicitanteEmail}}",
+  "phone": "3003334455",
+  "password": "{{solicitantePassword}}"
+}
+
+### Login Solicitante
+# @name loginSolicitante
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{solicitanteEmail}}",
+  "password": "{{solicitantePassword}}"
+}
+
+> {%
+  if (response.body && response.body.accessToken) {
+    client.global.set("solicitanteToken", response.body.accessToken);
+  }
+%}
+
+### Login Personal de Atención #1
+# @name loginAgent1
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{agenteEmail}}",
+  "password": "{{agentePassword}}"
+}
+
+> {%
+  if (response.body && response.body.accessToken) {
+    client.global.set("agentToken", response.body.accessToken);
+  }
+%}
+
+### Login Personal de Atención #2
+# @name loginAgent2
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{otroAgenteEmail}}",
+  "password": "{{otroAgentePassword}}"
+}
+
+> {%
+  if (response.body && response.body.accessToken) {
+    client.global.set("otherAgentToken", response.body.accessToken);
+  }
+%}
+
+### ============================================================================
+### PRUEBAS MÍNIMAS DE LA GUÍA PF-01 (SECCIÓN 2.3)
+### ============================================================================
+
+### PF-01: Registro válido de solicitud (Esperado: 201 Created)
+# @name createValidRequest
+POST {{baseUrl}}/api/v1/requests
+Authorization: Bearer {{solicitanteToken}}
+Content-Type: application/json
+
+{
+  "category": "REQUERIMIENTO_SERVICIO",
+  "subject": "Solicitud de acceso al laboratorio de redes",
+  "description": "Requiero activación de usuario institucional para prácticas de la asignatura en el bloque C."
+}
+
+> {%
+  if (response.body && response.body.code) {
+    client.global.set("requestCode", response.body.code);
+  }
+%}
+
+### PF-02: Registro con datos inválidos (Esperado: 400 Bad Request, no guarda nada)
+POST {{baseUrl}}/api/v1/requests
+Authorization: Bearer {{solicitanteToken}}
+Content-Type: application/json
+
+{
+  "category": "INVALIDA",
+  "subject": "Hola",
+  "description": "Muy corta"
+}
+
+### PF-03: Consulta de solicitud existente (Esperado: 200 OK)
+GET {{baseUrl}}/api/v1/requests/{{requestCode}}
+Authorization: Bearer {{solicitanteToken}}
+
+### PF-04: Consulta de solicitud inexistente (Esperado: 404 Not Found)
+GET {{baseUrl}}/api/v1/requests/SOL-2026-99999
+Authorization: Bearer {{solicitanteToken}}
+
+### PF-06a: Gestión sin token JWT (Esperado: 401 Unauthorized)
+POST {{baseUrl}}/api/v1/attention/requests/{{requestCode}}/assign
+Content-Type: application/json
+
+{
+  "assigneeId": "{{agenteId}}",
+  "priority": "ALTA"
+}
+
+### PF-06b: Gestión por actor no autorizado - Solicitante intenta asignar (Esperado: 403 Forbidden)
+POST {{baseUrl}}/api/v1/attention/requests/{{requestCode}}/assign
+Authorization: Bearer {{solicitanteToken}}
+Content-Type: application/json
+
+{
+  "assigneeId": "{{agenteId}}",
+  "priority": "ALTA"
+}
+
+### PF-05a: Gestión por actor autorizado - Coordinador asigna con prioridad ALTA (Esperado: 200 OK)
+POST {{baseUrl}}/api/v1/attention/requests/{{requestCode}}/assign
+Authorization: Bearer {{coordToken}}
+Content-Type: application/json
+
+{
+  "assigneeId": "{{agenteId}}",
+  "priority": "ALTA"
+}
+
+### PF-06c: Otro agente no asignado intenta intervenir (Esperado: 403 Forbidden)
+POST {{baseUrl}}/api/v1/attention/requests/{{requestCode}}/interventions
+Authorization: Bearer {{otherAgentToken}}
+Content-Type: application/json
+
+{
+  "comment": "Intento de intervención por un agente que no tiene asignado este caso."
+}
+
+### PF-05b: Agente asignado registra intervención interna (Esperado: 200 OK)
+POST {{baseUrl}}/api/v1/attention/requests/{{requestCode}}/interventions
+Authorization: Bearer {{agentToken}}
+Content-Type: application/json
+
+{
+  "comment": "Se verifica conectividad en el bloque C y se programa activación de usuario."
+}
+
+### PF-07: Consulta de estado durante atención (Esperado: 200 OK, status = EN_REVISION)
+GET {{baseUrl}}/api/v1/requests/{{requestCode}}
+Authorization: Bearer {{solicitanteToken}}
+
+### PF-08: Consulta de historial de atención completo interno (Esperado: 200 OK)
+GET {{baseUrl}}/api/v1/attention/requests/{{requestCode}}
+Authorization: Bearer {{coordToken}}
+
+### PF-09a: Agente asignado emite respuesta final inmutable (Esperado: 200 OK, status = RESUELTA)
+POST {{baseUrl}}/api/v1/attention/requests/{{requestCode}}/respond
+Authorization: Bearer {{agentToken}}
+Content-Type: application/json
+
+{
+  "responseText": "Su cuenta institucional fue habilitada en el laboratorio de redes del bloque C. Puede ingresar con su documento."
+}
+
+### PF-09b: Solicitante consulta la respuesta final (Esperado: 200 OK, status = RESUELTA + responseText)
+GET {{baseUrl}}/api/v1/requests/{{requestCode}}
+Authorization: Bearer {{solicitanteToken}}
+
+### PF-06d: Solicitante intenta consultar reporte consolidado (Esperado: 403 Forbidden)
+GET {{baseUrl}}/api/v1/reports/summary
+Authorization: Bearer {{solicitanteToken}}
+
+### PF-10a: Coordinación consulta resumen consolidado (Esperado: 200 OK)
+GET {{baseUrl}}/api/v1/reports/summary
+Authorization: Bearer {{coordToken}}
+
+### PF-10b: Coordinación consulta listado general paginado y filtrado (Esperado: 200 OK)
+GET {{baseUrl}}/api/v1/reports/requests?page=1&size=20&status=RESUELTA
+Authorization: Bearer {{coordToken}}
+
+### PF-11: Crear solicitud vinculada a una solicitud previa RESUELTA del mismo solicitante (Esperado: 201 Created)
+POST {{baseUrl}}/api/v1/requests
+Authorization: Bearer {{solicitanteToken}}
+Content-Type: application/json
+
+{
+  "category": "TRAMITE",
+  "subject": "Seguimiento por permiso adicional de laboratorio",
+  "description": "Aunque la solicitud anterior fue resuelta, necesito habilitar acceso también en horario nocturno.",
+  "previousRequestCode": "{{requestCode}}"
+}

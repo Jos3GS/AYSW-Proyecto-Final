@@ -1,7 +1,7 @@
 # ITM Service Desk (Frontend) - Mapa de Versiones y Ciclo de Vida
 **Ubicación:** `docs/version_map.md`  
-**Versión Actual en Desarrollo:** `v0.2.0` (En progreso — `003-service-requests` completada)  
-**Última Actualización:** 2026-11-15  
+**Versión Actual:** `v0.3.0` (`004-attention-lifecycle` y `005-coordination-reports` completadas)  
+**Última Actualización:** 2026-11-18  
 
 ---
 
@@ -27,8 +27,8 @@ flowchart LR
 | Versión | Nombre del Hito | Objetivo Principal | Specs / Épicas Incluidas | Trazabilidad HU / RF / RNF | Estado |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **`v0.1.0`** | Shell MVVM, Auth & Personal | Configuración Compose Multiplatform 1.12.2 (Material 3 en español), Koin, Jetpack Navigation, Ktor Client 3.6.x (OkHttp / JS fetch), `SessionStorage` `expect/actual` (`EncryptedSharedPreferences` / `sessionStorage`), Login, Registro público (Tabla 1), cierre de sesión/manejo `401` y módulo de Coordinador para registrar/listar personal interno | `001-project-setup` (✅ Completada), `002-auth-users` (✅ Completada) | **HU-01** (registro), **HU-07**; **RF-01**, **RF-07**; **RNF-01 a RNF-04**, **RNF-06**, **RNF-09** | ✅ Completada |
-| **`v0.2.0`** | Flujos de Solicitud y Atención | Pantallas por rol: registro de solicitudes (Tabla 2 + solicitud previa opcional), mis solicitudes paginadas (20/pág) con filtro de estado, detalle con código visible, formato `dd/mm/aaaa hh:mm` (`America/Bogota`) y confirmación de cancelación; bandeja de Coordinador para asignar/priorizar/reasignar; bandeja de Personal asignado (marca `Vencida`, intervenciones, escalamiento y confirmación de respuesta) | `003-service-requests` (✅ Completada), `004-attention-lifecycle` | **HU-01** (solicitud), **HU-02**, **HU-03**, **HU-04**, **HU-05**; **RF-02 a RF-05**; **RNF-06**, **RNF-07**, **RNF-09** | 🟡 En progreso |
-| **`v0.3.0`** | Panel Consolidado de Coordinación | Vista ejecutiva para Coordinador con totales por estado, categoría, prioridad, responsable, vencidas y resueltas dentro/fuera de plazo; filtros dinámicos (rango de fechas, categoría, prioridad, responsable) y acceso al listado general + detalle/historial completo | `005-coordination-reports` | **HU-06**; **RF-06**; **RNF-03**, **RNF-07**, **RNF-09** | ⚪ Planificado |
+| **`v0.2.0`** | Flujos de Solicitud y Atención | Pantallas por rol: registro de solicitudes (Tabla 2 + solicitud previa opcional), mis solicitudes paginadas (20/pág) con filtro de estado, detalle con código visible, formato `dd/mm/aaaa hh:mm` (`America/Bogota`) y confirmación de cancelación; bandeja de Coordinador para asignar/priorizar/reasignar; bandeja de Personal asignado (marca `Vencida`, intervenciones, escalamiento y confirmación de respuesta) | `003-service-requests` (✅ Completada), `004-attention-lifecycle` (✅ Completada) | **HU-01** (solicitud), **HU-02**, **HU-03**, **HU-04**, **HU-05**; **RF-02 a RF-05**; **RNF-06**, **RNF-07**, **RNF-09** | ✅ Completada |
+| **`v0.3.0`** | Panel Consolidado de Coordinación | Vista ejecutiva para Coordinador con totales por estado, categoría, prioridad, responsable, vencidas y resueltas dentro/fuera de plazo; filtros dinámicos (rango de fechas, categoría, prioridad, responsable) y acceso al listado general + detalle/historial completo | `005-coordination-reports` (✅ Completada) | **HU-06**; **RF-06**; **RNF-03**, **RNF-07**, **RNF-09** | ✅ Completada |
 | **`v1.0.0`** | Release v1.0 & Quality Gate | Validación responsiva completa en Web (`wasmJs`: Chrome, Firefox, Edge) y Android (`minSdk 26`, `targetSdk` 35/36), verificación de cero datos simulados en producción, cobertura $\ge 90\%$ (`kotlin-test`, `kotlinx-coroutines-test`, `Ktor MockEngine`, `Compose UI Test`), `ktlint 1.8.x` y auditoría `converge.md` | `006-hardening-release` | **RNF-01 a RNF-10** (auditoría completa de UI, seguridad y alcance) | ⚪ Planificado |
 
 > **Nota de Alcance (RNF-10):** Por restricción explícita del sistema, la interfaz no contempla carga de archivos adjuntos, notificaciones por correo/WhatsApp, pasarelas de pago, facturación ni integraciones externas. El solicitante consulta su avance directamente en la aplicación.

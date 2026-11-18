@@ -1,7 +1,7 @@
 # ITM Service Desk (Backend) - Mapa de Versiones y Ciclo de Vida
 **Ubicación:** `docs/version_map.md`  
-**Versión Actual:** `v0.2.0` (`003-service-requests` y `004-attention-lifecycle` completados)  
-**Última Actualización:** 2026-11-15  
+**Versión Actual:** `v0.3.0` (`005-coordination-reports` completado)  
+**Última Actualización:** 2026-11-18  
 
 ---
 
@@ -28,7 +28,7 @@ flowchart LR
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **`v0.1.0`** | Foundation, Auth & Personal | Arquitectura en capas, Ktor Netty, HikariCP + Flyway (usuario semilla Coordinador), registro público de solicitantes, login JWT (1h) con BCrypt, RBAC y gestión de personal interno | `001-project-setup`, `002-auth-users` | **HU-01** (registro), **HU-07**; **RF-01**, **RF-07**; **RNF-01 a RNF-04**, **RNF-06**, **RNF-08** | 🟢 Completado |
 | **`v0.2.0`** | Core Service Desk & Trazabilidad | Registro de solicitudes (`SOL-AAAA-NNNNN`, Builder), consulta/cancelación, bandeja y asignación/priorización (SLA 24h/72h/120h), máquina de estados (Patrón State), intervenciones, escalamiento, respuesta final, historial inmutable y cierre automático (24h) | `003-service-requests` (Completado), `004-attention-lifecycle` (Completado) | **HU-01** (solicitud), **HU-02**, **HU-03**, **HU-04**, **HU-05**; **RF-02 a RF-05**; **RNF-05 a RNF-09** | 🟢 Completado |
-| **`v0.3.0`** | Coordinación & Reportes Consolidados | Resumen consolidado para Coordinación (totales por estado, categoría, prioridad, responsable, vencidas y dentro/fuera de plazo), filtros combinados (Builder) y listado general paginado | `005-coordination-reports` | **HU-06**; **RF-06**; **RNF-03**, **RNF-07** | ⚪ Planificado |
+| **`v0.3.0`** | Coordinación & Reportes Consolidados | Resumen consolidado para Coordinación (totales por estado, categoría, prioridad, responsable, vencidas y dentro/fuera de plazo), filtros combinados (Builder) y listado general paginado | `005-coordination-reports` (Completado) | **HU-06**; **RF-06**; **RNF-03**, **RNF-07** | 🟢 Completado |
 | **`v1.0.0`** | Release v1.0 & Quality Gate | Cumplimiento integral RNF-01 a RNF-10 (rendimiento `< 2s` con 1000 solicitudes, paginación 20/pág, zona horaria `America/Bogota`, `.env.example`, README local), cobertura $\ge 90\%$ con Testcontainers PostgreSQL, `ktlint 1.8.x` y auditoría `converge.md` | `006-hardening-release` | **RNF-01 a RNF-10** (auditoría completa de alcance y calidad) | ⚪ Planificado |
 
 > **Nota de Alcance (RNF-10):** Por restricción explícita de alcance del sistema, no se incluyen archivos adjuntos, envío de correos electrónicos, mensajería WhatsApp, pagos, facturación ni integraciones con plataformas externas en ninguna versión del ciclo actual.

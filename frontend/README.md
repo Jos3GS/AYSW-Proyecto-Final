@@ -2,14 +2,19 @@
 
 Frontend multiplataforma para **Web (`wasmJs`)** y **Android (`minSdk 26`, `targetSdk 35`)** construido con **Kotlin Multiplatform**, **Compose Multiplatform (Material 3)**, **MVVM + UDF**, **Koin**, **Ktor Client** y **BuildKonfig**.
 
-## Arquitectura y Stack (`001-project-setup`)
+## Arquitectura y Stack (`001` a `005`)
 
 - **Kotlin Multiplatform:** `2.4.21`
-- **Compose Multiplatform:** `1.12.2` (Material 3 `1.9.0`, textos de UI 100% en español)
+- **Compose Multiplatform:** `1.12.2` (Material 3 `1.9.0`, textos de UI 100 % en español)
 - **Targets autorizados:** `androidTarget()` (`minSdk 26`, `targetSdk 35`) y `wasmJs { browser() }`
-- **Patrón de presentación:** MVVM + UDF (`StateFlow<StartupUiState>`, eventos globales por `SessionEventBus`)
-- **Capa de datos:** `Repository` (`SystemHealthRepositoryImpl`), `RemoteDataSource` (`SystemHealthRemoteDataSource`) y `Mapper` (`HealthMapper`, `ErrorMapper`)
-- **Red y serialización:** Ktor Client `3.6.1` (`OkHttp` en Android, `JS fetch` en `wasmJs`, `MockEngine` en pruebas) con `Json { ignoreUnknownKeys = false; explicitNulls = false }`
+- **Patrón de presentación:** MVVM + UDF (`StateFlow<*UiState>`, eventos globales por `SessionEventBus`)
+- **Módulos funcionales implementados:**
+  - `001-project-setup`: Arranque, verificación de salud (`/api/v1/health`), tema Material 3, DI Koin, red Ktor y `SessionStorage`.
+  - `002-auth-users`: `LoginScreen`, `RegisterScreen`, guardas `RequireRole`, cierre de sesión, `StaffListScreen` y `CreateStaffScreen`.
+  - `003-service-requests`: `ApplicantHomeScreen` / `MyRequestsScreen` (paginado 20/pág + filtro de estado), `CreateRequestScreen` (con vínculo opcional `previousRequestCode`) y `RequestDetailScreen` (historial filtrado `RF-03`, respuesta y cancelación con confirmación).
+  - `004-attention-lifecycle`: `CoordinatorHomeScreen` / `CoordinationPendingScreen`, `AgentHomeScreen` / `AgentInboxScreen` (marca informativa `OverdueBadge`), y `AttentionDetailScreen` (asignación, reasignación, intervenciones, escalamiento y respuesta final).
+  - `005-coordination-reports`: `CoordinationReportsScreen` (`ReportFilterPanel`, `ReportSummarySection` y listado general paginado).
+- **Red y serialización:** Ktor Client `3.6.1` (`OkHttp` en Android, `JS fetch` en `wasmJs`, `MockEngine` en pruebas) con `Json { ignoreUnknownKeys = false; explicitNulls = false }`.
 - **Almacenamiento de sesión JWT (`SessionStorage`):**
   - **Web (`wasmJsMain`):** memoria + `window.sessionStorage` (prohibido `localStorage` o cookies inseguras).
   - **Android (`androidMain`):** `EncryptedSharedPreferences` con `MasterKey` `AES256_GCM` sobre `Dispatchers.IO`.
@@ -24,22 +29,26 @@ Frontend multiplataforma para **Web (`wasmJs`)** y **Android (`minSdk 26`, `targ
   - `core/network/` — `HttpClientFactory` (`DefaultApiJson`, interceptor JWT y detección global de `401`) y `PlatformHttpEngine`
   - `core/storage/` — `SessionStorage`, `SessionEventBus`
   - `core/time/` — `DateFormatter` (`America/Bogota`, `dd/mm/aaaa hh:mm`)
-  - `data/` — `dto/`, `mapper/`, `remote/`, `repository/`
-  - `domain/` — `model/` (`ServiceHealth`, `DomainError`, `AppResult`), `repository/`
-  - `viewmodel/` — `StartupUiState`, `StartupUiMapper`, `StartupViewModel`
-  - `ui/` — `theme/Theme.kt`, `navigation/AppNavHost.kt`, `screens/StartupScreen.kt`
+  - `data/` — `dto/`, `mapper/`, `remote/`, `repository/` (`Auth`, `Staff`, `ServiceRequest`, `Attention`, `Report`, `SystemHealth`)
+  - `domain/` — `model/`, `repository/`, `validation/` (`UserFormValidator`, `RequestFormValidator`, `AttentionFormValidator`, `ReportFilterValidator`)
+  - `viewmodel/` — ViewModels y UiStates para Startup, Auth, Staff, Requests, Attention y Reports
+  - `ui/` — `theme/Theme.kt`, `components/`, `navigation/` (`AppNavHost.kt`, `Routes.kt`), `screens/`
 - `androidMain/` — `ServiceDeskApp`, `MainActivity`, `AndroidSessionStorage`, `PlatformActuals`
 - `debug/res/xml/network_security_config.xml` — Permite HTTP cleartext en desarrollo (`10.0.2.2`, `localhost`, `127.0.0.1`); `release` mantiene `usesCleartextTraffic="false"`
 - `wasmJsMain/` — `Main.kt`, `WebSessionStorage`, `PlatformActuals`, `resources/index.html`
 
 ## Configuración de API con `BuildKonfig`
 
-Por defecto, en compilación `debug` (`IS_RELEASE = false`):
-- **Web (`wasmJs`):** `WEB_DEV_API_URL = "http://localhost:8080"`
+Por defecto, en compilación `debug` (`IS_RELEASE = false`) según `composeApp/build.gradle.kts`:
+- **Web (`wasmJs`):** `WEB_DEV_API_URL = "https://localhost:8443"` (apunta al proxy TLS Caddy del backend)
 - **Android Emulador:** `ANDROID_DEV_API_URL = "http://10.0.2.2:8080"`
 
 ### Overrides por línea de comandos
 
+- **Web contra backend HTTP directo (sin Caddy):**
+  ```bash
+  ./gradlew :composeApp:wasmJsBrowserDevelopmentRun -PwebDevApiUrl=http://localhost:8080
+  ```
 - **Dispositivo físico Android (LAN):**
   ```bash
   ./gradlew :composeApp:installDebug -PapiBaseUrl=http://192.168.1.50:8080

@@ -67,6 +67,7 @@ API RESTful del sistema **ITM Service Desk**, construida con **Kotlin 2.4.x**, *
    ```
    Al arrancar:
    - Se valida toda la configuración mediante `AppConfigBuilder`.
+   - `CaddyBootstrapper` verifica si **Caddy** ya está corriendo (puerto `8443` / `2019` o proceso activo); si no lo está y `CADDY_AUTO_START=true` (por defecto), lo inicia automáticamente usando `infra/Caddyfile`.
    - Flyway ejecuta automáticamente las migraciones pendientes (`V1__create_users_table.sql`, `V2__create_revoked_tokens_table.sql`, `V3__create_service_requests_tables.sql`, `V4__add_autoclose_partial_index.sql`, `V5__add_coordination_reports_indexes.sql`).
    - `CoordinatorSeedService` crea de forma idempotente el único usuario `COORDINADOR` semilla.
    - `AutoCloseScheduler` inicia el barrido periódico de cierre automático (`24h`) con corutinas Ktor.
@@ -86,8 +87,8 @@ API RESTful del sistema **ITM Service Desk**, construida con **Kotlin 2.4.x**, *
    }
    ```
 
-5. **Proxy Inverso TLS con Caddy (Opcional en local / Obligatorio en producción):**
-   Usa [`infra/Caddyfile.example`](infra/Caddyfile.example) como base para exponer HTTPS con Caddy redirigiendo hacia `127.0.0.1:8080`.
+5. **Proxy Inverso TLS con Caddy (Automático en local / configurable en producción):**
+   Por defecto al ejecutar el proyecto (`./gradlew run` o `ApplicationKt.main()`), el backend verifica si Caddy está activo y, de no estarlo, lo inicia en segundo plano con [`infra/Caddyfile`](infra/Caddyfile) (`https://localhost:8443` → `127.0.0.1:8080`). Si ya se encuentra en ejecución, omite el inicio para evitar conflictos de puertos. En entornos donde Caddy se gestione externamente, puedes desactivarlo con `CADDY_AUTO_START=false`. Usa [`infra/Caddyfile.example`](infra/Caddyfile.example) como referencia para producción.
 
 ---
 
