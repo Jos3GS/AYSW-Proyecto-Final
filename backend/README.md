@@ -117,6 +117,7 @@ API RESTful del sistema **ITM Service Desk**, construida con **Kotlin 2.4.x**, *
 | `POST /api/v1/attention/requests/{code}/respond` | JWT (`PERSONAL_ATENCION` asignado) | Emite respuesta final inmutable (`20..2000` chars, `EN_REVISION -> RESUELTA`) y calcula `respondedWithinSla` (`200 OK`). |
 | `GET /api/v1/reports/summary` | JWT (`COORDINADOR`) | Resumen consolidado con métricas agregadas en SQL y filtros combinables `America/Bogota` (`200 OK` / `400`). |
 | `GET /api/v1/reports/requests` | JWT (`COORDINADOR`) | Listado general paginado (`page >= 1`, `size in 1..20`, `created_at DESC, id DESC`) consistente con `/summary` (`200 OK` / `400`). |
+| `GET /swagger` | Público (IP allowlist) | Interfaz gráfica interactiva **Swagger UI** (`GET /swagger/documentation.yaml` expone el contrato OpenAPI 3.0.3). |
 
 ---
 

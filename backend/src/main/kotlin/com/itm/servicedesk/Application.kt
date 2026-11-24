@@ -23,6 +23,7 @@ import com.itm.servicedesk.routing.healthRouting
 import com.itm.servicedesk.routing.reportRouting
 import com.itm.servicedesk.routing.serviceRequestRouting
 import com.itm.servicedesk.routing.staffRouting
+import com.itm.servicedesk.routing.swaggerRouting
 import com.itm.servicedesk.service.AttentionService
 import com.itm.servicedesk.service.AuthService
 import com.itm.servicedesk.service.AutoCloseScheduler
@@ -72,6 +73,7 @@ fun Application.configureModule(
     if (healthServiceOverride != null) {
         routing {
             healthRouting(healthServiceOverride)
+            swaggerRouting()
         }
         return
     }
@@ -163,5 +165,6 @@ fun Application.configureModule(
         serviceRequestRouting(serviceRequestService, appConfig.server.timezone)
         attentionRouting(attentionService, appConfig.server.timezone)
         reportRouting(reportService, appConfig.server.timezone)
+        swaggerRouting()
     }
 }

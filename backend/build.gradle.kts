@@ -31,6 +31,7 @@ dependencies {
     implementation(libs.ktor.server.forwarded.header)
     implementation(libs.ktor.server.auth)
     implementation(libs.ktor.server.auth.jwt)
+    implementation(libs.ktor.server.swagger)
     implementation(libs.kotlinx.serialization.json)
 
     implementation(libs.exposed.core)
