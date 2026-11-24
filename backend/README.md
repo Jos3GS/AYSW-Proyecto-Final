@@ -50,7 +50,9 @@ API RESTful del sistema **ITM Service Desk**, construida con **Kotlin 2.4.x**, *
    ```
    Ajusta `DB_URL`, `DB_USER`, `DB_PASSWORD`, `JWT_SECRET` (mínimo 32 caracteres), `JWT_EXPIRATION_SECONDS=3600`, `AUTO_CLOSE_INTERVAL_SECONDS=60` y `SEED_COORDINATOR_*` según tu entorno local.
 
-2. **Levantar PostgreSQL 18** (ejemplo rápido con Docker para desarrollo local):
+2. **PostgreSQL 18 con Docker (automático al arrancar o manual):**
+   Al ejecutar `./gradlew run`, `PostgresBootstrapper` verifica si PostgreSQL ya responde en el puerto configurado en `DB_URL` (`localhost:5432`). Si no está corriendo y `POSTGRES_AUTO_START=true` (por defecto), inicia el contenedor `itm-postgres18` si existe detenido o lo crea automáticamente con `postgres:18-alpine` usando `DB_URL`, `DB_USER` y `DB_PASSWORD`, esperando a que acepte conexiones antes de ejecutar Flyway.
+   También puedes crearlo manualmente con Docker si lo prefieres:
    ```bash
    docker run -d \
      --name itm-postgres18 \
@@ -60,6 +62,7 @@ API RESTful del sistema **ITM Service Desk**, construida con **Kotlin 2.4.x**, *
      -p 5432:5432 \
      postgres:18-alpine
    ```
+   En entornos donde PostgreSQL se gestione externamente, puedes desactivarlo con `POSTGRES_AUTO_START=false` (además se omite automáticamente cuando `DB_URL` apunta a un host remoto).
 
 3. **Ejecutar el Backend:**
    ```bash
@@ -67,6 +70,7 @@ API RESTful del sistema **ITM Service Desk**, construida con **Kotlin 2.4.x**, *
    ```
    Al arrancar:
    - Se valida toda la configuración mediante `AppConfigBuilder`.
+   - `PostgresBootstrapper` verifica si PostgreSQL está activo en el puerto local; si no lo está y `POSTGRES_AUTO_START=true`, inicia o crea el contenedor Docker (`itm-postgres18`) y espera a que `pg_isready` confirme disponibilidad.
    - `CaddyBootstrapper` verifica si **Caddy** ya está corriendo (puerto `8443` / `2019` o proceso activo); si no lo está y `CADDY_AUTO_START=true` (por defecto), lo inicia automáticamente usando `infra/Caddyfile`.
    - Flyway ejecuta automáticamente las migraciones pendientes (`V1__create_users_table.sql`, `V2__create_revoked_tokens_table.sql`, `V3__create_service_requests_tables.sql`, `V4__add_autoclose_partial_index.sql`, `V5__add_coordination_reports_indexes.sql`).
    - `CoordinatorSeedService` crea de forma idempotente el único usuario `COORDINADOR` semilla.
@@ -117,6 +121,7 @@ API RESTful del sistema **ITM Service Desk**, construida con **Kotlin 2.4.x**, *
 | `POST /api/v1/attention/requests/{code}/respond` | JWT (`PERSONAL_ATENCION` asignado) | Emite respuesta final inmutable (`20..2000` chars, `EN_REVISION -> RESUELTA`) y calcula `respondedWithinSla` (`200 OK`). |
 | `GET /api/v1/reports/summary` | JWT (`COORDINADOR`) | Resumen consolidado con métricas agregadas en SQL y filtros combinables `America/Bogota` (`200 OK` / `400`). |
 | `GET /api/v1/reports/requests` | JWT (`COORDINADOR`) | Listado general paginado (`page >= 1`, `size in 1..20`, `created_at DESC, id DESC`) consistente con `/summary` (`200 OK` / `400`). |
+| `GET /swagger` | Público (IP allowlist) | Interfaz gráfica interactiva **Swagger UI** (`GET /swagger/documentation.yaml` expone el contrato OpenAPI 3.0.3). |
 
 ---
 

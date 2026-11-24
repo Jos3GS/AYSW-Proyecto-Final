@@ -3,6 +3,7 @@ package com.itm.servicedesk
 import com.itm.servicedesk.config.CaddyBootstrapper
 import com.itm.servicedesk.config.DatabaseFactory
 import com.itm.servicedesk.config.EnvConfig
+import com.itm.servicedesk.config.PostgresBootstrapper
 import com.itm.servicedesk.config.configureIpAllowList
 import com.itm.servicedesk.config.configureSecurityPlugins
 import com.itm.servicedesk.config.configureStatusPages
@@ -23,6 +24,7 @@ import com.itm.servicedesk.routing.healthRouting
 import com.itm.servicedesk.routing.reportRouting
 import com.itm.servicedesk.routing.serviceRequestRouting
 import com.itm.servicedesk.routing.staffRouting
+import com.itm.servicedesk.routing.swaggerRouting
 import com.itm.servicedesk.service.AttentionService
 import com.itm.servicedesk.service.AuthService
 import com.itm.servicedesk.service.AutoCloseScheduler
@@ -45,6 +47,7 @@ fun main() {
     val env = EnvConfig.load()
     val appConfig = EnvConfig.toAppConfig(systemEnv = env)
     TimeZone.setDefault(TimeZone.getTimeZone(appConfig.server.timezone))
+    PostgresBootstrapper().ensureRunning(env = env, databaseConfig = appConfig.database)
     CaddyBootstrapper().ensureRunning(env = env)
 
     embeddedServer(
@@ -72,6 +75,7 @@ fun Application.configureModule(
     if (healthServiceOverride != null) {
         routing {
             healthRouting(healthServiceOverride)
+            swaggerRouting()
         }
         return
     }
@@ -163,5 +167,6 @@ fun Application.configureModule(
         serviceRequestRouting(serviceRequestService, appConfig.server.timezone)
         attentionRouting(attentionService, appConfig.server.timezone)
         reportRouting(reportService, appConfig.server.timezone)
+        swaggerRouting()
     }
 }

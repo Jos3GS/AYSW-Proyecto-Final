@@ -1,0 +1,1531 @@
+openapi: 3.0.3
+info:
+  title: ITM Service Desk API
+  version: 1.0.0
+  description: |
+    API RESTful del sistema **ITM Service Desk** para la radicación, atención,
+    seguimiento SLA y consolidación gerencial de solicitudes de servicio.
+
+    ### Autenticación
+    Los endpoints protegidos requieren un token JWT `Bearer` (`HMAC256`, vigencia 1 hora)
+    obtenido mediante `POST /api/v1/auth/login` o `POST /api/v1/auth/register`.
+    Usa el botón **Authorize** para ingresar el token y probar los endpoints según tu rol
+    (`SOLICITANTE`, `PERSONAL_ATENCION` o `COORDINADOR`).
+
+    ### Zona horaria y paginación
+    - Todas las fechas se expresan en formato ISO-8601 con zona `America/Bogota` (`-05:00`).
+    - Los listados paginados aceptan `page >= 1` (por defecto `1`) y `size` entre `1` y `20` (por defecto `20`).
+servers:
+  - url: /
+    description: Servidor actual (HTTP :8080 o HTTPS Caddy :8443)
+tags:
+  - name: Salud
+    description: Monitoreo de disponibilidad de la API y conectividad con PostgreSQL 18.
+  - name: Autenticación
+    description: Registro público de solicitantes, inicio de sesión, perfil actual y cierre de sesión con revocación JWT.
+  - name: Personal
+    description: Gestión de personal interno (`PERSONAL_ATENCION` y `COORDINADOR`) exclusiva de Coordinación.
+  - name: Solicitudes
+    description: Radicación, consulta, historial filtrado y cancelación para el rol `SOLICITANTE`.
+  - name: Atención
+    description: Bandejas, asignación, reasignación, intervenciones, escalamiento y respuesta final.
+  - name: Reportes
+    description: Resumen consolidado y listado general con filtros combinables para `COORDINADOR`.
+
+paths:
+  /api/v1/health:
+    get:
+      tags:
+        - Salud
+      summary: Verificar estado de la API y base de datos
+      description: Endpoint público (sujeto a lista de IPs permitidas) para comprobar que la API y PostgreSQL 18 están operativos.
+      responses:
+        "200":
+          description: Servicio y base de datos operativos.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponseDto"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailableError"
+
+  /api/v1/auth/register:
+    post:
+      tags:
+        - Autenticación
+      summary: Registrar un nuevo solicitante
+      description: Crea una cuenta con rol fijo `SOLICITANTE` (BCrypt costo 12) y emite un JWT válido por 1 hora.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequestDto"
+      responses:
+        "201":
+          description: Solicitante registrado y autenticado correctamente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponseDto"
+        "400":
+          $ref: "#/components/responses/ValidationOrMalformedError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+
+  /api/v1/auth/login:
+    post:
+      tags:
+        - Autenticación
+      summary: Iniciar sesión
+      description: Autentica cualquier usuario activo (`SOLICITANTE`, `PERSONAL_ATENCION`, `COORDINADOR`) y emite un nuevo JWT `1h`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequestDto"
+      responses:
+        "200":
+          description: Autenticación exitosa.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponseDto"
+        "400":
+          $ref: "#/components/responses/ValidationOrMalformedError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+
+  /api/v1/auth/me:
+    get:
+      tags:
+        - Autenticación
+      summary: Consultar perfil del usuario autenticado
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Perfil del usuario autenticado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfileDto"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+
+  /api/v1/auth/logout:
+    post:
+      tags:
+        - Autenticación
+      summary: Cerrar sesión y revocar token JWT
+      description: Registra el `jti` del token actual en `revoked_tokens` y purga registros expirados.
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Sesión cerrada y token revocado.
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+
+  /api/v1/users/staff:
+    post:
+      tags:
+        - Personal
+      summary: Crear usuario de personal interno
+      description: Exclusivo para `COORDINADOR`. Permite registrar usuarios con rol `PERSONAL_ATENCION` o `COORDINADOR`.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStaffRequestDto"
+      responses:
+        "201":
+          description: Usuario interno creado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfileDto"
+        "400":
+          $ref: "#/components/responses/ValidationOrMalformedError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+    get:
+      tags:
+        - Personal
+      summary: Listar personal interno paginado
+      description: Exclusivo para `COORDINADOR`. Lista personal interno (`PERSONAL_ATENCION` y `COORDINADOR`), excluyendo solicitantes.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/SizeParam"
+        - name: role
+          in: query
+          required: false
+          description: Filtra por rol de personal interno.
+          schema:
+            $ref: "#/components/schemas/StaffRole"
+      responses:
+        "200":
+          description: Listado paginado de personal interno.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PagedStaffResponseDto"
+        "400":
+          $ref: "#/components/responses/ValidationOrMalformedError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+
+  /api/v1/requests:
+    post:
+      tags:
+        - Solicitudes
+      summary: Radicar una nueva solicitud de servicio
+      description: Exclusivo para `SOLICITANTE`. Crea la solicitud en estado `ABIERTA` con código consecutivo `SOL-AAAA-NNNNN`.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateServiceRequestDto"
+      responses:
+        "201":
+          description: Solicitud radicada correctamente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceRequestDetailDto"
+        "400":
+          $ref: "#/components/responses/ValidationOrMalformedError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+
+  /api/v1/requests/my:
+    get:
+      tags:
+        - Solicitudes
+      summary: Listar mis solicitudes
+      description: Exclusivo para `SOLICITANTE`. Devuelve las solicitudes propias paginadas con filtro opcional por estado.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/SizeParam"
+        - name: status
+          in: query
+          required: false
+          description: Filtra por estado de la solicitud.
+          schema:
+            $ref: "#/components/schemas/RequestStatus"
+      responses:
+        "200":
+          description: Listado paginado de solicitudes del solicitante.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PagedServiceRequestsResponseDto"
+        "400":
+          $ref: "#/components/responses/ValidationOrMalformedError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+
+  /api/v1/requests/{code}:
+    get:
+      tags:
+        - Solicitudes
+      summary: Consultar detalle de una solicitud propia
+      description: Exclusivo para el `SOLICITANTE` propietario. El historial excluye intervenciones internas y oculta comentarios de escalamiento/reasignación (`RF-03`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/RequestCodeParam"
+      responses:
+        "200":
+          description: Detalle de la solicitud e historial filtrado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceRequestDetailDto"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+
+  /api/v1/requests/{code}/cancel:
+    post:
+      tags:
+        - Solicitudes
+      summary: Cancelar una solicitud abierta
+      description: Exclusivo para el `SOLICITANTE` propietario mientras la solicitud esté en estado `ABIERTA`. El cuerpo es opcional.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/RequestCodeParam"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancelServiceRequestDto"
+      responses:
+        "200":
+          description: Solicitud cancelada (`ABIERTA -> CANCELADA`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceRequestDetailDto"
+        "400":
+          $ref: "#/components/responses/ValidationOrMalformedError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+
+  /api/v1/attention/coordination/pending:
+    get:
+      tags:
+        - Atención
+      summary: Bandeja de pendientes para Coordinación
+      description: Exclusivo para `COORDINADOR`. Lista solicitudes `ABIERTA` y `ESCALADA` ordenadas de la más antigua a la más reciente.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/SizeParam"
+        - name: status
+          in: query
+          required: false
+          description: Filtra por estado pendiente (`ABIERTA` o `ESCALADA`).
+          schema:
+            type: string
+            enum:
+              - ABIERTA
+              - ESCALADA
+      responses:
+        "200":
+          description: Listado paginado de solicitudes pendientes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PagedAttentionRequestsResponseDto"
+        "400":
+          $ref: "#/components/responses/ValidationOrMalformedError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+
+  /api/v1/attention/requests/{code}/assign:
+    post:
+      tags:
+        - Atención
+      summary: Asignar solicitud y prioridad SLA
+      description: Exclusivo para `COORDINADOR`. Transiciona `ABIERTA -> EN_REVISION` y fija `firstAssignedAt` y `dueAt` (`ALTA=24h`, `MEDIA=72h`, `BAJA=120h`).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/RequestCodeParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssignRequestDto"
+      responses:
+        "200":
+          description: Solicitud asignada correctamente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttentionRequestDetailDto"
+        "400":
+          $ref: "#/components/responses/ValidationOrMalformedError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+
+  /api/v1/attention/requests/{code}/reassign:
+    post:
+      tags:
+        - Atención
+      summary: Reasignar solicitud escalada
+      description: Exclusivo para `COORDINADOR`. Transiciona `ESCALADA -> EN_REVISION` conservando `firstAssignedAt` sin reiniciar el reloj SLA.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/RequestCodeParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReassignRequestDto"
+      responses:
+        "200":
+          description: Solicitud reasignada correctamente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttentionRequestDetailDto"
+        "400":
+          $ref: "#/components/responses/ValidationOrMalformedError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+
+  /api/v1/attention/my-assigned:
+    get:
+      tags:
+        - Atención
+      summary: Bandeja de solicitudes asignadas al agente
+      description: Exclusivo para `PERSONAL_ATENCION`. Lista las solicitudes asignadas al usuario autenticado con marca informativa `isOverdue`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/SizeParam"
+        - name: status
+          in: query
+          required: false
+          description: Filtra por estado de la bandeja asignada.
+          schema:
+            type: string
+            enum:
+              - EN_REVISION
+              - ESCALADA
+              - RESUELTA
+              - CERRADA
+      responses:
+        "200":
+          description: Listado paginado de solicitudes asignadas.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PagedAttentionRequestsResponseDto"
+        "400":
+          $ref: "#/components/responses/ValidationOrMalformedError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+
+  /api/v1/attention/requests/{code}:
+    get:
+      tags:
+        - Atención
+      summary: Consultar detalle interno e historial completo
+      description: Disponible para `COORDINADOR` o el `PERSONAL_ATENCION` asignado a la solicitud. Incluye intervenciones internas y eventos de `SISTEMA`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/RequestCodeParam"
+      responses:
+        "200":
+          description: Detalle interno e historial cronológico completo.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttentionRequestDetailDto"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+
+  /api/v1/attention/requests/{code}/interventions:
+    post:
+      tags:
+        - Atención
+      summary: Registrar intervención interna
+      description: Exclusivo para el `PERSONAL_ATENCION` asignado mientras la solicitud está en `EN_REVISION`. No cambia el estado.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/RequestCodeParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddInterventionRequestDto"
+      responses:
+        "200":
+          description: Intervención registrada correctamente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttentionRequestDetailDto"
+        "400":
+          $ref: "#/components/responses/ValidationOrMalformedError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+
+  /api/v1/attention/requests/{code}/escalate:
+    post:
+      tags:
+        - Atención
+      summary: Escalar solicitud con motivo
+      description: Exclusivo para el `PERSONAL_ATENCION` asignado. Transiciona `EN_REVISION -> ESCALADA`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/RequestCodeParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EscalateRequestDto"
+      responses:
+        "200":
+          description: Solicitud escalada correctamente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttentionRequestDetailDto"
+        "400":
+          $ref: "#/components/responses/ValidationOrMalformedError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+
+  /api/v1/attention/requests/{code}/respond:
+    post:
+      tags:
+        - Atención
+      summary: Emitir respuesta final inmutable
+      description: Exclusivo para el `PERSONAL_ATENCION` asignado. Transiciona `EN_REVISION -> RESUELTA` y calcula `respondedWithinSla`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/RequestCodeParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RespondRequestDto"
+      responses:
+        "200":
+          description: Respuesta final registrada correctamente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttentionRequestDetailDto"
+        "400":
+          $ref: "#/components/responses/ValidationOrMalformedError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "409":
+          $ref: "#/components/responses/ConflictError"
+
+  /api/v1/reports/summary:
+    get:
+      tags:
+        - Reportes
+      summary: Consultar resumen consolidado de Coordinación
+      description: Exclusivo para `COORDINADOR`. Calcula totales por estado, categoría, prioridad, responsable y cumplimiento SLA con filtros combinables.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CreatedFromParam"
+        - $ref: "#/components/parameters/CreatedToParam"
+        - $ref: "#/components/parameters/ReportStatusParam"
+        - $ref: "#/components/parameters/ReportCategoryParam"
+        - $ref: "#/components/parameters/ReportPriorityParam"
+        - $ref: "#/components/parameters/AssignedToIdParam"
+      responses:
+        "200":
+          description: Resumen consolidado generado correctamente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CoordinationReportSummaryDto"
+        "400":
+          $ref: "#/components/responses/ValidationOrMalformedError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+
+  /api/v1/reports/requests:
+    get:
+      tags:
+        - Reportes
+      summary: Consultar listado general filtrado para Coordinación
+      description: Exclusivo para `COORDINADOR`. Listado paginado consistente con los filtros de `/api/v1/reports/summary`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CreatedFromParam"
+        - $ref: "#/components/parameters/CreatedToParam"
+        - $ref: "#/components/parameters/ReportStatusParam"
+        - $ref: "#/components/parameters/ReportCategoryParam"
+        - $ref: "#/components/parameters/ReportPriorityParam"
+        - $ref: "#/components/parameters/AssignedToIdParam"
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/SizeParam"
+      responses:
+        "200":
+          description: Listado paginado de solicitudes para reportes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PagedCoordinationReportRequestsResponseDto"
+        "400":
+          $ref: "#/components/responses/ValidationOrMalformedError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token JWT HMAC256 obtenido en `/api/v1/auth/login` o `/api/v1/auth/register`.
+
+  parameters:
+    PageParam:
+      name: page
+      in: query
+      required: false
+      description: Número de página (`>= 1`).
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    SizeParam:
+      name: size
+      in: query
+      required: false
+      description: Tamaño de página (`1..20`).
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 20
+        default: 20
+    RequestCodeParam:
+      name: code
+      in: path
+      required: true
+      description: Código único de la solicitud (`SOL-AAAA-NNNNN`).
+      schema:
+        type: string
+        example: SOL-2026-00001
+    CreatedFromParam:
+      name: createdFrom
+      in: query
+      required: false
+      description: Fecha inicial inclusiva (`YYYY-MM-DD`, zona `America/Bogota`).
+      schema:
+        type: string
+        format: date
+        example: "2026-11-01"
+    CreatedToParam:
+      name: createdTo
+      in: query
+      required: false
+      description: Fecha final inclusiva (`YYYY-MM-DD`, zona `America/Bogota`).
+      schema:
+        type: string
+        format: date
+        example: "2026-11-30"
+    ReportStatusParam:
+      name: status
+      in: query
+      required: false
+      schema:
+        $ref: "#/components/schemas/RequestStatus"
+    ReportCategoryParam:
+      name: category
+      in: query
+      required: false
+      schema:
+        $ref: "#/components/schemas/RequestCategory"
+    ReportPriorityParam:
+      name: priority
+      in: query
+      required: false
+      schema:
+        $ref: "#/components/schemas/RequestPriority"
+    AssignedToIdParam:
+      name: assignedToId
+      in: query
+      required: false
+      description: UUID del responsable (`PERSONAL_ATENCION`).
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    ValidationOrMalformedError:
+      description: Error de validación de campos o cuerpo JSON mal formado (`400 Bad Request`).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiErrorDto"
+    UnauthorizedError:
+      description: No autorizado. Token ausente, inválido, expirado o revocado (`401 Unauthorized`).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiErrorDto"
+    ForbiddenError:
+      description: Permisos insuficientes, propiedad inválida o IP no autorizada (`403 Forbidden`).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiErrorDto"
+    NotFoundError:
+      description: Recurso o solicitud no encontrada (`404 Not Found`).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiErrorDto"
+    ConflictError:
+      description: Conflicto de unicidad o transición de estado inválida (`409 Conflict`).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiErrorDto"
+    ServiceUnavailableError:
+      description: Base de datos temporalmente no disponible (`503 Service Unavailable`).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiErrorDto"
+
+  schemas:
+    UserRole:
+      type: string
+      enum:
+        - SOLICITANTE
+        - PERSONAL_ATENCION
+        - COORDINADOR
+    StaffRole:
+      type: string
+      enum:
+        - PERSONAL_ATENCION
+        - COORDINADOR
+    RequestCategory:
+      type: string
+      enum:
+        - TRAMITE
+        - ORIENTACION
+        - ATENCION_ADMINISTRATIVA
+        - REQUERIMIENTO_SERVICIO
+    RequestStatus:
+      type: string
+      enum:
+        - ABIERTA
+        - EN_REVISION
+        - ESCALADA
+        - RESUELTA
+        - CERRADA
+        - CANCELADA
+    RequestPriority:
+      type: string
+      enum:
+        - ALTA
+        - MEDIA
+        - BAJA
+    HistoryAction:
+      type: string
+      enum:
+        - CREACION
+        - CANCELACION
+        - ASIGNACION
+        - INTERVENCION
+        - ESCALAMIENTO
+        - REASIGNACION
+        - RESPUESTA
+        - CIERRE_AUTOMATICO
+    HistoryActorRole:
+      type: string
+      enum:
+        - SOLICITANTE
+        - PERSONAL_ATENCION
+        - COORDINADOR
+        - SISTEMA
+
+    ErrorDetailDto:
+      type: object
+      required: [field, message]
+      properties:
+        field:
+          type: string
+          example: subject
+        message:
+          type: string
+          example: El asunto debe tener entre 5 y 100 caracteres.
+
+    ApiErrorDto:
+      type: object
+      required: [timestamp, status, error, message, path, details]
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-11-24T13:15:00-05:00"
+        status:
+          type: integer
+          example: 400
+        error:
+          type: string
+          example: VALIDATION_ERROR
+        message:
+          type: string
+          example: Los datos proporcionados contienen errores de validación.
+        path:
+          type: string
+          example: /api/v1/requests
+        details:
+          type: array
+          items:
+            $ref: "#/components/schemas/ErrorDetailDto"
+
+    HealthResponseDto:
+      type: object
+      required: [status, service, database, timestamp]
+      properties:
+        status:
+          type: string
+          example: UP
+        service:
+          type: string
+          example: itm-service-desk-backend
+        database:
+          type: string
+          example: UP
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-11-24T13:15:00-05:00"
+
+    RegisterRequestDto:
+      type: object
+      required: [fullName, documentNumber, email, phone, password]
+      additionalProperties: false
+      properties:
+        fullName:
+          type: string
+          minLength: 3
+          maxLength: 100
+          example: Laura Gómez Pérez
+        documentNumber:
+          type: string
+          pattern: "^[0-9]{5,15}$"
+          example: "1020304050"
+        email:
+          type: string
+          format: email
+          maxLength: 100
+          example: laura.gomez@correo.itm.edu.co
+        phone:
+          type: string
+          pattern: "^[0-9]{7,15}$"
+          example: "3001234567"
+        password:
+          type: string
+          format: password
+          minLength: 8
+          example: ClaveSegura2026
+
+    LoginRequestDto:
+      type: object
+      required: [email, password]
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+          format: email
+          example: coordinador@itm.edu.co
+        password:
+          type: string
+          format: password
+          example: ChangeMe1234
+
+    UserProfileDto:
+      type: object
+      required: [id, fullName, documentNumber, email, phone, role, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        fullName:
+          type: string
+        documentNumber:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        role:
+          $ref: "#/components/schemas/UserRole"
+        createdAt:
+          type: string
+          format: date-time
+
+    AuthResponseDto:
+      type: object
+      required: [accessToken, tokenType, expiresInSeconds, expiresAt, user]
+      properties:
+        accessToken:
+          type: string
+        tokenType:
+          type: string
+          example: Bearer
+        expiresInSeconds:
+          type: integer
+          format: int64
+          example: 3600
+        expiresAt:
+          type: string
+          format: date-time
+        user:
+          $ref: "#/components/schemas/UserProfileDto"
+
+    CreateStaffRequestDto:
+      type: object
+      required: [fullName, documentNumber, email, phone, password, role]
+      additionalProperties: false
+      properties:
+        fullName:
+          type: string
+          minLength: 3
+          maxLength: 100
+          example: Carlos Andrés Demo
+        documentNumber:
+          type: string
+          pattern: "^[0-9]{5,15}$"
+          example: "1000000101"
+        email:
+          type: string
+          format: email
+          maxLength: 100
+          example: agente.demo@itm.edu.co
+        phone:
+          type: string
+          pattern: "^[0-9]{7,15}$"
+          example: "3001112233"
+        password:
+          type: string
+          format: password
+          minLength: 8
+          example: AgenteDemo123
+        role:
+          $ref: "#/components/schemas/StaffRole"
+
+    StaffSummaryDto:
+      type: object
+      required: [id, fullName, email, role, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        fullName:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          $ref: "#/components/schemas/StaffRole"
+        createdAt:
+          type: string
+          format: date-time
+
+    PagedStaffResponseDto:
+      type: object
+      required: [items, page, size, totalItems, totalPages]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/StaffSummaryDto"
+        page:
+          type: integer
+        size:
+          type: integer
+        totalItems:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+
+    CreateServiceRequestDto:
+      type: object
+      required: [category, subject, description]
+      additionalProperties: false
+      properties:
+        category:
+          $ref: "#/components/schemas/RequestCategory"
+        subject:
+          type: string
+          minLength: 5
+          maxLength: 100
+          example: Solicitud de acceso al laboratorio de redes
+        description:
+          type: string
+          minLength: 20
+          maxLength: 2000
+          example: Requiero activación de usuario institucional para prácticas de la asignatura en el bloque C.
+        previousRequestCode:
+          type: string
+          nullable: true
+          pattern: "^SOL-\\d{4}-\\d{5,}$"
+          example: SOL-2026-00001
+
+    CancelServiceRequestDto:
+      type: object
+      additionalProperties: false
+      properties:
+        reason:
+          type: string
+          nullable: true
+          maxLength: 500
+          example: Ya fue resuelto por otro canal.
+
+    RequestHistoryItemDto:
+      type: object
+      required: [id, action, newState, occurredAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        action:
+          $ref: "#/components/schemas/HistoryAction"
+        previousState:
+          allOf:
+            - $ref: "#/components/schemas/RequestStatus"
+          nullable: true
+        newState:
+          $ref: "#/components/schemas/RequestStatus"
+        occurredAt:
+          type: string
+          format: date-time
+        comment:
+          type: string
+          nullable: true
+
+    ServiceRequestDetailDto:
+      type: object
+      required: [id, code, category, subject, description, status, createdAt, updatedAt, history]
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+          example: SOL-2026-00001
+        category:
+          $ref: "#/components/schemas/RequestCategory"
+        subject:
+          type: string
+        description:
+          type: string
+        status:
+          $ref: "#/components/schemas/RequestStatus"
+        previousRequestCode:
+          type: string
+          nullable: true
+        responseText:
+          type: string
+          nullable: true
+        respondedAt:
+          type: string
+          format: date-time
+          nullable: true
+        closedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        history:
+          type: array
+          items:
+            $ref: "#/components/schemas/RequestHistoryItemDto"
+
+    ServiceRequestSummaryDto:
+      type: object
+      required: [id, code, subject, category, status, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+          example: SOL-2026-00001
+        subject:
+          type: string
+        category:
+          $ref: "#/components/schemas/RequestCategory"
+        status:
+          $ref: "#/components/schemas/RequestStatus"
+        previousRequestCode:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    PagedServiceRequestsResponseDto:
+      type: object
+      required: [items, page, size, totalItems, totalPages]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ServiceRequestSummaryDto"
+        page:
+          type: integer
+        size:
+          type: integer
+        totalItems:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+
+    AssignRequestDto:
+      type: object
+      required: [assigneeId, priority]
+      additionalProperties: false
+      properties:
+        assigneeId:
+          type: string
+          format: uuid
+        priority:
+          $ref: "#/components/schemas/RequestPriority"
+
+    ReassignRequestDto:
+      type: object
+      required: [assigneeId, reason]
+      additionalProperties: false
+      properties:
+        assigneeId:
+          type: string
+          format: uuid
+        reason:
+          type: string
+          minLength: 10
+          maxLength: 500
+          example: Se reasigna al equipo de infraestructura por especialidad técnica.
+        priority:
+          allOf:
+            - $ref: "#/components/schemas/RequestPriority"
+          nullable: true
+
+    AddInterventionRequestDto:
+      type: object
+      required: [comment]
+      additionalProperties: false
+      properties:
+        comment:
+          type: string
+          minLength: 10
+          maxLength: 1000
+          example: Se verifica conectividad en el bloque C y se programa activación de usuario.
+
+    EscalateRequestDto:
+      type: object
+      required: [reason]
+      additionalProperties: false
+      properties:
+        reason:
+          type: string
+          minLength: 10
+          maxLength: 500
+          example: Requiere aprobación de nivel superior en redes institucionales.
+
+    RespondRequestDto:
+      type: object
+      required: [responseText]
+      additionalProperties: false
+      properties:
+        responseText:
+          type: string
+          minLength: 20
+          maxLength: 2000
+          example: Su cuenta institucional fue habilitada en el laboratorio de redes del bloque C.
+
+    InternalRequestHistoryItemDto:
+      type: object
+      required: [id, action, newState, actorName, actorRole, occurredAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        action:
+          $ref: "#/components/schemas/HistoryAction"
+        previousState:
+          allOf:
+            - $ref: "#/components/schemas/RequestStatus"
+          nullable: true
+        newState:
+          $ref: "#/components/schemas/RequestStatus"
+        actorId:
+          type: string
+          format: uuid
+          nullable: true
+        actorName:
+          type: string
+        actorRole:
+          $ref: "#/components/schemas/HistoryActorRole"
+        comment:
+          type: string
+          nullable: true
+        occurredAt:
+          type: string
+          format: date-time
+
+    AttentionRequestDetailDto:
+      type: object
+      required:
+        - id
+        - code
+        - category
+        - subject
+        - description
+        - status
+        - requesterId
+        - requesterName
+        - isOverdue
+        - createdAt
+        - updatedAt
+        - history
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        category:
+          $ref: "#/components/schemas/RequestCategory"
+        subject:
+          type: string
+        description:
+          type: string
+        status:
+          $ref: "#/components/schemas/RequestStatus"
+        previousRequestCode:
+          type: string
+          nullable: true
+        requesterId:
+          type: string
+          format: uuid
+        requesterName:
+          type: string
+        assignedToId:
+          type: string
+          format: uuid
+          nullable: true
+        assignedToName:
+          type: string
+          nullable: true
+        priority:
+          allOf:
+            - $ref: "#/components/schemas/RequestPriority"
+          nullable: true
+        firstAssignedAt:
+          type: string
+          format: date-time
+          nullable: true
+        assignedAt:
+          type: string
+          format: date-time
+          nullable: true
+        dueAt:
+          type: string
+          format: date-time
+          nullable: true
+        isOverdue:
+          type: boolean
+        responseText:
+          type: string
+          nullable: true
+        respondedAt:
+          type: string
+          format: date-time
+          nullable: true
+        respondedWithinSla:
+          type: boolean
+          nullable: true
+        closedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        history:
+          type: array
+          items:
+            $ref: "#/components/schemas/InternalRequestHistoryItemDto"
+
+    AttentionRequestSummaryDto:
+      type: object
+      required: [id, code, subject, category, status, requesterId, requesterName, isOverdue, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        subject:
+          type: string
+        category:
+          $ref: "#/components/schemas/RequestCategory"
+        status:
+          $ref: "#/components/schemas/RequestStatus"
+        priority:
+          allOf:
+            - $ref: "#/components/schemas/RequestPriority"
+          nullable: true
+        requesterId:
+          type: string
+          format: uuid
+        requesterName:
+          type: string
+        assignedToId:
+          type: string
+          format: uuid
+          nullable: true
+        assignedToName:
+          type: string
+          nullable: true
+        firstAssignedAt:
+          type: string
+          format: date-time
+          nullable: true
+        dueAt:
+          type: string
+          format: date-time
+          nullable: true
+        isOverdue:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    PagedAttentionRequestsResponseDto:
+      type: object
+      required: [items, page, size, totalItems, totalPages]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AttentionRequestSummaryDto"
+        page:
+          type: integer
+        size:
+          type: integer
+        totalItems:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+
+    AssigneeMetricDto:
+      type: object
+      required: [assigneeId, assigneeName, totalAssigned, overdueAssigned]
+      properties:
+        assigneeId:
+          type: string
+          format: uuid
+        assigneeName:
+          type: string
+        totalAssigned:
+          type: integer
+          format: int64
+        overdueAssigned:
+          type: integer
+          format: int64
+
+    CoordinationReportSummaryDto:
+      type: object
+      required:
+        - generatedAt
+        - totalRequests
+        - byStatus
+        - byCategory
+        - byPriority
+        - unassignedPriorityCount
+        - byAssignee
+        - unassignedCount
+        - overdueCount
+        - resolvedWithinSlaCount
+        - resolvedOutsideSlaCount
+      properties:
+        generatedAt:
+          type: string
+          format: date-time
+        totalRequests:
+          type: integer
+          format: int64
+        byStatus:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int64
+        byCategory:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int64
+        byPriority:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int64
+        unassignedPriorityCount:
+          type: integer
+          format: int64
+        byAssignee:
+          type: array
+          items:
+            $ref: "#/components/schemas/AssigneeMetricDto"
+        unassignedCount:
+          type: integer
+          format: int64
+        overdueCount:
+          type: integer
+          format: int64
+        resolvedWithinSlaCount:
+          type: integer
+          format: int64
+        resolvedOutsideSlaCount:
+          type: integer
+          format: int64
+
+    CoordinationReportRequestItemDto:
+      type: object
+      required: [id, code, subject, category, status, requesterId, requesterName, isOverdue, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        subject:
+          type: string
+        category:
+          $ref: "#/components/schemas/RequestCategory"
+        status:
+          $ref: "#/components/schemas/RequestStatus"
+        priority:
+          allOf:
+            - $ref: "#/components/schemas/RequestPriority"
+          nullable: true
+        requesterId:
+          type: string
+          format: uuid
+        requesterName:
+          type: string
+        assignedToId:
+          type: string
+          format: uuid
+          nullable: true
+        assignedToName:
+          type: string
+          nullable: true
+        dueAt:
+          type: string
+          format: date-time
+          nullable: true
+        isOverdue:
+          type: boolean
+        respondedAt:
+          type: string
+          format: date-time
+          nullable: true
+        respondedWithinSla:
+          type: boolean
+          nullable: true
+        closedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    PagedCoordinationReportRequestsResponseDto:
+      type: object
+      required: [items, page, size, totalItems, totalPages]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CoordinationReportRequestItemDto"
+        page:
+          type: integer
+        size:
+          type: integer
+        totalItems:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer

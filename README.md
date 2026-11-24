@@ -111,6 +111,10 @@ Verificación rápida:
 curl http://127.0.0.1:8080/api/v1/health
 ```
 
+Documentación interactiva **Swagger UI / OpenAPI** (sujeta a `ALLOWED_CLIENT_IPS`):
+- **HTTP local:** `http://127.0.0.1:8080/swagger` (especificación YAML en `/swagger/documentation.yaml`)
+- **HTTPS vía Caddy:** `https://localhost:8443/swagger`
+
 ### Paso 3: Ejecutar el Frontend (`frontend/`)
 
 - **Web (`wasmJs`):**
