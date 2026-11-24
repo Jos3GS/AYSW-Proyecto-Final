@@ -7,8 +7,16 @@ import com.itm.servicedesk.routing.dto.ApiErrorDto
 import com.itm.servicedesk.service.HealthService
 import io.ktor.client.request.get
 import io.ktor.client.request.header
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.contentType
+import io.ktor.server.response.respondText
+import io.ktor.server.routing.post
+import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Test
@@ -130,5 +138,70 @@ class SwaggerRoutingTest {
             val error = Json.decodeFromString<ApiErrorDto>(blockedResponse.bodyAsText())
             assertEquals(403, error.status)
             assertEquals("FORBIDDEN", error.error)
+        }
+
+    @Test
+    fun `POST behind Caddy HTTPS proxy passes same-origin CORS while foreign origins remain blocked`() =
+        testApplication {
+            val appConfig = buildSwaggerTestConfig()
+            val healthService = buildStubHealthService()
+            application {
+                configureModule(
+                    appConfig = appConfig,
+                    healthServiceOverride = healthService,
+                    seedOnStartup = false,
+                )
+                routing {
+                    post("/api/v1/test-proxy-post") {
+                        call.respondText("ok")
+                    }
+                }
+            }
+
+            val caddySameOriginPost =
+                client.post("/api/v1/test-proxy-post") {
+                    header(HttpHeaders.Origin, "https://localhost:8443")
+                    header("X-Forwarded-Proto", "https")
+                    header("X-Forwarded-Host", "localhost:8443")
+                    header("X-Forwarded-For", "127.0.0.1")
+                    contentType(ContentType.Application.Json)
+                    setBody("{}")
+                }
+            assertEquals(HttpStatusCode.OK, caddySameOriginPost.status)
+            assertEquals("ok", caddySameOriginPost.bodyAsText())
+
+            val caddyDefaultHttpsPortPost =
+                client.post("/api/v1/test-proxy-post") {
+                    header(HttpHeaders.Origin, "https://api.itm.edu.co")
+                    header("X-Forwarded-Proto", "https")
+                    header("X-Forwarded-Host", "api.itm.edu.co")
+                    header("X-Forwarded-For", "::1")
+                    contentType(ContentType.Application.Json)
+                    setBody("{}")
+                }
+            assertEquals(HttpStatusCode.OK, caddyDefaultHttpsPortPost.status)
+
+            val caddyIpv6AndPortHeaderPost =
+                client.post("/api/v1/test-proxy-post") {
+                    header(HttpHeaders.Origin, "https://[::1]:8443")
+                    header("X-Forwarded-Ssl", "on")
+                    header("X-Forwarded-Host", "[::1]:8443")
+                    header("X-Forwarded-Port", "8443")
+                    header("X-Forwarded-For", "::1")
+                    contentType(ContentType.Application.Json)
+                    setBody("{}")
+                }
+            assertEquals(HttpStatusCode.OK, caddyIpv6AndPortHeaderPost.status)
+
+            val foreignOriginPost =
+                client.post("/api/v1/test-proxy-post") {
+                    header(HttpHeaders.Origin, "https://evil.example.com")
+                    header("X-Forwarded-Proto", "https")
+                    header("X-Forwarded-Host", "localhost:8443")
+                    header("X-Forwarded-For", "127.0.0.1")
+                    contentType(ContentType.Application.Json)
+                    setBody("{}")
+                }
+            assertEquals(HttpStatusCode.Forbidden, foreignOriginPost.status)
         }
 }
